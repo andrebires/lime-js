@@ -162,3 +162,25 @@ test('empty contributions still consume a bounded stream budget', () => {
   assembly.accept({id:'m',stream:'data',content:''});assembly.accept({id:'m',stream:'data',content:''});
   assert.throws(()=>assembly.accept({id:'m',stream:'data',content:''}),/limit/);
 });
+
+test('sparse arrays are rejected before cached document sizes can diverge from JSON', () => {
+  const a=new Lime.MessageAssembler();
+  assert.throws(()=>a.accept({type:'json',content:Array(1)}),/JSON value/);
+  a.accept({id:'m',type:'json',stream:'start'});
+  assert.throws(()=>a.accept({id:'m',stream:'data',content:[{op:'add',path:'/items',value:Array(1)}]}),/JSON value/);
+  assert.throws(()=>a.accept({id:'m',stream:'end'}),/not started/);
+  const {transport,messages,errors}=channel();
+  transport.receive({id:'m',type:'json',stream:'start'});
+  transport.receive({id:'m',stream:'data',content:[{op:'add',path:'/items',value:Array(1)}]});
+  transport.receive({id:'m',stream:'end'});
+  assert.equal(messages.length,0);assert.equal(errors.length,2);assert.equal(transport.sent.length,0);
+});
+
+test('assembler abandons malformed and oversized contributions before a later end', () => {
+  for (const [type,content,limits] of [['json',Infinity,{}],['text',7,{}],['text','oversized',{maxContentBytes:4}]]) {
+    const a=new Lime.MessageAssembler(undefined,limits);
+    a.accept({id:'m',type,stream:'start'});
+    assert.throws(()=>a.accept({id:'m',stream:'data',content}));
+    assert.throws(()=>a.accept({id:'m',stream:'end'}),/not started/);
+  }
+});

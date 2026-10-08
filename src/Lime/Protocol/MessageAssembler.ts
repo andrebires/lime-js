@@ -44,14 +44,13 @@ export default class MessageAssembler {
     if (!assembly) throw new Error("Stream has not started in this session");
     if (message.thread !== undefined && message.thread !== assembly.message.thread) throw new Error("Stream thread mismatch");
     if (message.stream === "data") {
-      const { value, bytes } = this.content(message.content, assembly.message.type, assembly.text ? 0 : 2);
-      if (assembly.bytes + bytes > this.maxContentBytes) throw new Error("Stream content limit exceeded");
-      if (assembly.text) assembly.text.push(value);
-      else {
-        try { assembly.bytes += assembly.value.apply(value, this.maxPatchOperations, this.maxContentBytes - assembly.bytes - bytes); }
-        catch (error) { this.streams.delete(key); throw error; }
-      }
-      assembly.bytes += bytes;
+      try {
+        const { value, bytes } = this.content(message.content, assembly.message.type, assembly.text ? 0 : 2);
+        if (assembly.bytes + bytes > this.maxContentBytes) throw new Error("Stream content limit exceeded");
+        if (assembly.text) assembly.text.push(value);
+        else assembly.bytes += assembly.value.apply(value, this.maxPatchOperations, this.maxContentBytes - assembly.bytes - bytes);
+        assembly.bytes += bytes;
+      } catch (error) { this.streams.delete(key); throw error; }
       return;
     }
     this.streams.delete(key);

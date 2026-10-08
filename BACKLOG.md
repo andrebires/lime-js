@@ -41,4 +41,4 @@
 - Outcome: fresh revision assembly using JSON Patch with incremental array operations and literal null values.
 - Acceptance: all six RFC operations, strict pointers/indices, atomic stream rejection, bounded operations/content/depth/copy work, ownership isolation, whole-message retry contracts, at least 90% changed-line coverage, and measured array streaming.
 - Scope: JSON message assembly; complete JSON and LIME 1 mode retain their semantics. Streamed commands remain outside the current JS runtime.
-- Evidence: 52 tests pass, 99.09% total lines / 99.40% changed lines (167/168), package dry run and array benchmarks pass. Shared vectors match Go and the live browser engine.
+- Evidence: 54 tests pass, 99.09% total lines / 99.41% changed lines (169/170), package dry run and array benchmarks pass. Shared vectors match Go and the live browser engine.
