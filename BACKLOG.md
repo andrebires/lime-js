@@ -17,9 +17,10 @@
   transport responsibilities.
 - Authority: explicit implementation request and permission to modernize the
   library. Fast-chat product milestones and ADRs are not changed by this task.
-- Evidence: `npm run verify` passes 48 tests, generated public types, 99.06%
-  total / 98.53% changed source coverage; package dry run and whitespace checks
-  pass. Reproducible baseline comparison is recorded in `docs/lime-2-client.md`
+- Evidence: `npm run verify` passes 51 tests, generated public types, 99.08%
+  total / 98.57% changed source coverage; package dry run and whitespace checks
+  pass. Node 20 runtime smoke checks and 20 contract/package tests pass.
+  Reproducible baseline comparison is recorded in `docs/lime-2-client.md`
   and `docs/benchmark-results.json`.
 
 ## LIME2-02 — Standardize alias registration and capability negotiation

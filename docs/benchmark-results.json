@@ -5,25 +5,25 @@
   "samples": 7,
   "warmups": 1,
   "current": {
-    "minifiedBytes": 23223,
-    "gzipBytes": 7463,
+    "minifiedBytes": 23722,
+    "gzipBytes": 7563,
     "commandRoundTrips": {
       "commands": 5000,
-      "medianMs": 1.93525,
+      "medianMs": 2.360624999999999,
       "timersAfterResponses": 0
     },
     "completeMessageReceive": {
       "messages": 100000,
-      "medianMs": 10.779417000000002
+      "medianMs": 11.338583
     },
     "legacyMessageReceive": {
       "messages": 100000,
-      "medianMs": 0.761250000000004
+      "medianMs": 0.7619579999999928
     },
     "textStream": {
       "contributions": 10000,
       "characters": 320000,
-      "medianMs": 2.618083000000013
+      "medianMs": 2.709625000000017
     }
   },
   "baseline": {
@@ -31,12 +31,12 @@
     "gzipBytes": 27035,
     "commandRoundTrips": {
       "commands": 5000,
-      "medianMs": 30.180375000000026,
+      "medianMs": 31.549374999999998,
       "timersAfterResponses": 5000
     },
     "completeMessageReceive": {
       "messages": 100000,
-      "medianMs": 0.5903329999999869
+      "medianMs": 0.6412920000000213
     }
   }
 }

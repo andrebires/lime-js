@@ -34,7 +34,10 @@ the pending message through `received`. Buffer exhaustion throws before send.
 Send failure removes that operation's pending state and reports the exception;
 the caller owns recovery from possible partial transport execution.
 
-Retry exhaustion reports an application callback and retains pending state.
+After the final retry, a full receipt window is allowed before exhaustion is
+reported: `retryInterval`, or 5,000 ms for manual retries with scheduling disabled.
+A receipt cancels that message's window. Exhaustion reports an application callback
+and retains pending state.
 A session end or disposal reports and drops its outstanding in-memory deliveries;
 new sessions need a new channel and explicit application requeue. Received
 marker history stores only thread/position markers, releases acknowledged content,
@@ -70,6 +73,7 @@ Removed Bluebird, webpack 4, UglifyJS, outdated release/commit tooling and stale
 hand-written types. Native promises, ES2018 output, generated declarations, ESM
 and UMD/CommonJS builds now share the same source. No runtime dependencies.
 Command maps are safe for IDs such as `__proto__`; responses cancel their timers.
+Node runtime support starts at 20, where global Web Crypto is enabled by default.
 UUID generation uses Web Crypto without a bundled crypto shim.
 
 Version 2 is the default. Optional version 1 emits the original unversioned new
@@ -80,16 +84,17 @@ with deterministic local contracts, without a live historical server.
 
 ## Verification and measured performance
 
-`npm run verify` passes 48 deterministic tests: selected wire semantics, RFC 7396
+`npm run verify` passes 51 deterministic tests: selected wire semantics, RFC 7396
 appendix fixtures, independent UTF-8 byte-count bounds, malformed/rejected input,
 peer and revision isolation, cumulative gaps, bounded timer-controlled retries,
 command cleanup, delayed terminal establishment, and serialized bidirectional
 transport contracts (including lost end frames and lost receipts). Package checks
 cover native ESM/CommonJS imports, UMD browser/AMD execution in VM contexts, and a
-strict TypeScript consumer. `npm pack --dry-run` checks shipped bundles and types.
+strict TypeScript consumer. Node 20.20.2 passes UUID/establishment smoke checks
+and all 20 package, streaming, and transport contract tests. `npm pack --dry-run` checks shipped bundles and types.
 
-Final verification: 99.06% total source line coverage and 98.53% changed source
-line coverage (602/611 measured changed lines). CI enforces at least 90% total
+Final verification: 99.08% total source line coverage and 98.57% changed source
+line coverage (620/629 measured changed lines). CI enforces at least 90% total
 and changed source line coverage. Declaration-only
 TypeScript emits no executable code and is excluded naturally; missing coverage
 for changed executable source fails closed. Benchmark results below are local
@@ -101,15 +106,15 @@ between rounds; it does not change the library's command resolution behavior.
 
 | Measurement | Original | New client |
 | --- | ---: | ---: |
-| Minified bytes | 96,945 | 23,223 |
-| Gzip bytes, level 9 | 27,035 | 7,463 |
-| 5,000 in-memory command round trips | 30.18 ms | 1.94 ms |
+| Minified bytes | 96,945 | 23,722 |
+| Gzip bytes, level 9 | 27,035 | 7,563 |
+| 5,000 in-memory command round trips | 31.55 ms | 2.36 ms |
 | Timers still alive after those responses | 5,000 | 0 |
-| 100,000 complete-message receives | 0.59 ms | 10.78 ms, strict LIME 2 |
-| 100,000 legacy pass-through receives | 0.59 ms | 0.76 ms, LIME 1 mode |
-| 10,000 text contributions / 320,000 characters | Unsupported | 2.62 ms |
+| 100,000 complete-message receives | 0.64 ms | 11.34 ms, strict LIME 2 |
+| 100,000 legacy pass-through receives | 0.64 ms | 0.76 ms, LIME 1 mode |
+| 10,000 text contributions / 320,000 characters | Unsupported | 2.71 ms |
 
-The gzip bundle is 72.4% smaller. Command resolution is substantially
+The gzip bundle is 72.0% smaller. Command resolution is substantially
 faster and no longer retains successful-request timers. LIME 2 validation,
 byte limits, normalization and content ownership cost more CPU than the original
 unvalidated receive path; the table retains that comparison. These measurements

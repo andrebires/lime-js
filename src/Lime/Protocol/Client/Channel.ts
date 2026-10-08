@@ -6,7 +6,7 @@ import Session, { SessionListener, SessionState } from "../Session";
 import Transport from "../Network/Transport";
 import { ContentTypeRegistry } from "../../ContentTypes";
 import MessageAssembler, { AssemblyLimits } from "../MessageAssembler";
-import DeliveryBuffer from "./DeliveryBuffer";
+import DeliveryBuffer, { PendingDelivery } from "./DeliveryBuffer";
 import { validateNotification, validateMessage } from "../Validation";
 
 export interface MessageChannel extends MessageListener { sendMessage(message: Message): void; }
@@ -38,6 +38,7 @@ export default abstract class Channel implements MessageChannel, CommandChannel,
   private deliveries: DeliveryBuffer;
   private commands = new Map<string, PendingCommand>();
   private retryTimer: ReturnType<typeof setTimeout>;
+  private finalReceiptTimers = new Map<PendingDelivery, ReturnType<typeof setTimeout>>();
   private readonly maxPendingCommands: number;
   private readonly retryInterval: number;
   private readonly maxRetryAttempts: number;
@@ -151,6 +152,7 @@ export default abstract class Channel implements MessageChannel, CommandChannel,
       this.transport.send(message);
     } catch (error) {
       this.deliveries.remove(message, recipient); this.outgoing.discard(message);
+      this.scheduleRetries();
       throw error;
     }
     this.scheduleRetries();
@@ -164,11 +166,25 @@ export default abstract class Channel implements MessageChannel, CommandChannel,
       entry.attempts++;
       try { this.transport.send(entry.message); }
       catch (error) { this.onDeliveryError(error as Error, entry.message); }
-      if (this.deliveries.contains(entry) && entry.attempts === this.maxRetryAttempts) this.onDeliveryError(new Error("Message retry limit reached; delivery remains unacknowledged"), entry.message);
+      if (this.deliveries.contains(entry) && entry.attempts === this.maxRetryAttempts) this.waitForFinalReceipt(entry);
     }
     this.scheduleRetries();
   }
+  private waitForFinalReceipt(entry: PendingDelivery): void {
+    // Sending the last retry is not evidence of failure: its receipt is asynchronous.
+    const timer = setTimeout(() => {
+      this.finalReceiptTimers.delete(entry);
+      if (this.deliveries.contains(entry)) {
+        this.onDeliveryError(new Error("Message retry limit reached; delivery remains unacknowledged"), entry.message);
+      }
+    }, this.retryInterval || 5000);
+    this.finalReceiptTimers.set(entry, timer);
+    (timer as any).unref?.();
+  }
   private scheduleRetries(): void {
+    for (const [entry, timer] of this.finalReceiptTimers) {
+      if (!this.deliveries.contains(entry)) { clearTimeout(timer); this.finalReceiptTimers.delete(entry); }
+    }
     const ready = !this.disposed && this.retryInterval && this.state === SessionState.ESTABLISHED &&
       this.deliveries.values().some(entry => entry.complete && entry.attempts < this.maxRetryAttempts);
     if (!ready) { clearTimeout(this.retryTimer); this.retryTimer = undefined; return; }
@@ -205,6 +221,8 @@ export default abstract class Channel implements MessageChannel, CommandChannel,
   }
   protected resetSession(error = new Error("Session ended before command response")): void {
     clearTimeout(this.retryTimer);
+    for (const timer of this.finalReceiptTimers.values()) clearTimeout(timer);
+    this.finalReceiptTimers.clear();
     this.incoming.reset();
     this.outgoing.reset();
     this.contentTypes.reset();

@@ -7,7 +7,7 @@ LIME 1 wire mode. The draft is not an official released LIME standard.
 The client uses native promises and has no runtime dependencies. Builds include
 CommonJS (`dist/lime.js`), ESM (`dist/lime.mjs`), and browser/AMD UMD bundles
 (`dist/lime.js`, `dist/lime.min.js`). Type declarations ship with the package.
-Runtime: Node 18+ or a modern browser; development and tests: Node 24+.
+Runtime: Node 20+ or a modern browser; development and tests: Node 24+.
 
 ## Use
 
@@ -98,7 +98,9 @@ Tracked deliveries retry automatically, bounded by the options below. Retries
 send the full completed message with the original `(id, rev)`. This is
 **at-least-once delivery**: applications must deduplicate before consequential
 side effects. ID-less messages are neither buffered nor retried. Buffer
-exhaustion throws before send; retry exhaustion reports `onDeliveryError` and
+exhaustion throws before send. After the last retry, the client allows one full
+`retryInterval` for its asynchronous receipt (5,000 ms when automatic scheduling
+is disabled), then reports `onDeliveryError` if still unacknowledged and
 keeps the message unacknowledged. Transport errors throw and remove that send's
 local pending state; callers must recover explicitly.
 

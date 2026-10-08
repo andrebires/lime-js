@@ -42,7 +42,7 @@
   "module": "dist/lime.mjs",
   "types": "dist/Lime/Lime.d.ts",
   "engines": {
-    "node": ">=18"
+    "node": ">=20"
   },
   "exports": {
     ".": {

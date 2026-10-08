@@ -144,7 +144,7 @@ test('retry buffers keep full content, preserve identity, and isolate caller mut
   c.retryUnacknowledged(); assert.deepEqual(t.sent.at(-1).content,{a:1});
   c.sendMessage({id:'s',rev:2,stream:'end'}); c.retryUnacknowledged();
   assert.deepEqual(t.sent.at(-1),{id:'s',rev:2,type:'text/plain',content:'onetwo'});
-  assert.equal(deliveries.length,1); assert.equal(c.pendingMessageCount,2);
+  assert.equal(deliveries.length,0); assert.equal(c.pendingMessageCount,2);
   t.receive(receipt('m')); t.receive(receipt('s',{rev:2})); c.dispose();
 });
 test('automatic retries are bounded and are not postponed by later sends', t => {
@@ -152,7 +152,9 @@ test('automatic retries are bounded and are not postponed by later sends', t => 
   const {client:c,transport:transport,deliveries} = channel({retryInterval:100,maxRetryAttempts:2});
   c.sendMessage(msg('a')); t.mock.timers.tick(50); c.sendMessage(msg('b')); t.mock.timers.tick(50);
   assert.equal(transport.sent.length,4); t.mock.timers.tick(100); assert.equal(transport.sent.length,6);
-  assert.equal(deliveries.length,2); t.mock.timers.tick(1000); assert.equal(transport.sent.length,6);
+  assert.equal(deliveries.length,0); t.mock.timers.tick(99); assert.equal(deliveries.length,0);
+  t.mock.timers.tick(1); assert.equal(deliveries.length,2); t.mock.timers.tick(1000); assert.equal(transport.sent.length,6);
+  assert.equal(deliveries.length,2);
   assert.equal(c.pendingMessageCount,2); c.dispose();
 });
 test('synchronous retry receipts cancel the timer without reporting exhausted delivery', t => {
@@ -168,7 +170,7 @@ test('send errors roll back stream state and capacity; retry errors retain unack
   assert.throws(()=>c.sendMessage(msg('b')),/capacity/); assert.throws(()=>c.sendMessage({id:'a',type:'text',stream:'start'}),/already pending/);
   t.failSend=true; assert.throws(()=>c.sendMessage({id:'a',stream:'data',content:'bad'})); assert.equal(c.pendingMessageCount,0);
   t.failSend=false; c.sendMessage(msg('b')); t.failSend=true; c.retryUnacknowledged();
-  assert.equal(c.pendingMessageCount,1); assert.equal(deliveries.length,2); c.dispose();
+  assert.equal(c.pendingMessageCount,1); assert.equal(deliveries.length,1); c.dispose();
 });
 test('invalid client options and send messages fail before sending', () => {
   for (const options of [{version:3},{maxPendingMessages:0},{maxPendingCommands:-1},{retryInterval:NaN},{retryInterval:2147483648},{maxRetryAttempts:-1}]) assert.throws(()=>channel(options));
@@ -250,4 +252,35 @@ test('pending stream identity and thread metadata do not retain the caller envel
   t.receive({id:'m',thread:'t',event:'failed',reason:{code:21}});
   assert.equal(errors.length,0);assert.equal(c.pendingMessageCount,1);
   c.sendMessage({id:'m',stream:'end'});t.receive(receipt('m',{thread:'t'}));assert.equal(c.pendingMessageCount,0);c.dispose();
+});
+
+test('asynchronous receipt for the final retry never reports exhaustion', t => {
+  t.mock.timers.enable({apis:['setTimeout']});
+  const {client:c,transport,deliveries}=channel({retryInterval:100,maxRetryAttempts:1});
+  c.sendMessage(msg('m'));
+  transport.respond=e=>setTimeout(()=>transport.receive(receipt(e.id)),1);
+  t.mock.timers.tick(100);assert.equal(transport.sent.length,2);assert.equal(deliveries.length,0);
+  t.mock.timers.tick(1);assert.equal(c.pendingMessageCount,0);
+  t.mock.timers.tick(500);assert.equal(deliveries.length,0);c.dispose();
+});
+test('each final retry gets its own full receipt window despite other pending sends', t => {
+  t.mock.timers.enable({apis:['setTimeout']});
+  const {client:c,transport,deliveries}=channel({retryInterval:100,maxRetryAttempts:2});
+  c.sendMessage(msg('a'));t.mock.timers.tick(100);
+  t.mock.timers.tick(50);c.sendMessage(msg('b'));c.retryUnacknowledged();
+  assert.equal(deliveries.length,0);t.mock.timers.tick(50);assert.equal(deliveries.length,0);
+  t.mock.timers.tick(49);assert.equal(deliveries.length,0);t.mock.timers.tick(1);
+  assert.deepEqual(deliveries.map(d=>d.message.id),['a']);
+  transport.receive(receipt('b'));t.mock.timers.tick(100);assert.equal(deliveries.length,1);
+  c.dispose();
+});
+test('manual final retry uses a receipt window and disposal cancels it', t => {
+  t.mock.timers.enable({apis:['setTimeout']});
+  const {client:c,transport,deliveries}=channel({retryInterval:0,maxRetryAttempts:1});
+  c.sendMessage(msg('m'));c.retryUnacknowledged();assert.equal(deliveries.length,0);
+  t.mock.timers.tick(4999);assert.equal(deliveries.length,0);
+  transport.receive(receipt('m'));t.mock.timers.tick(1);assert.equal(deliveries.length,0);
+  c.sendMessage(msg('other'));c.retryUnacknowledged();c.dispose();
+  assert.equal(deliveries.length,1);assert.match(deliveries[0].error.message,/disposed/);
+  t.mock.timers.tick(5000);assert.equal(deliveries.length,1);
 });
