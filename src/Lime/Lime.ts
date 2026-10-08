@@ -8,10 +8,12 @@ export
   } from "./Protocol/Envelope";
 export
   { default as Message
+  , MessageStream
   , MessageListener
   } from "./Protocol/Message";
 export
   { default as Notification
+  , NotificationScope
   , NotificationEvent
   , NotificationListener
   } from "./Protocol/Notification";
@@ -56,6 +58,7 @@ export
   , NotificationChannel
   , SessionChannel
   , CommandProcessor
+  , ChannelOptions
   } from "./Protocol/Client/Channel";
 export { default as ClientChannel } from "./Protocol/Client/ClientChannel";
 
@@ -63,4 +66,6 @@ export { default as ClientChannel } from "./Protocol/Client/ClientChannel";
 export { default as Transport } from "./Protocol/Network/Transport";
 
 // Lime.ContentTypes
-export { default as ContentTypes } from "./ContentTypes";
+export { default as ContentTypes, ContentTypeAliases, ContentTypeRegistry } from "./ContentTypes";
+
+export { default as MessageAssembler, AssemblyLimits } from "./Protocol/MessageAssembler";

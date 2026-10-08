@@ -4,16 +4,17 @@
   "description": "JavaScript LIME implementation",
   "main": "dist/lime.js",
   "files": [
-    "dist/lime.js",
-    "dist/lime.min.js"
+    "dist",
+    "lime-js.d.ts"
   ],
   "scripts": {
-    "commit": "./node_modules/.bin/git-cz",
-    "build": "./node_modules/.bin/webpack",
-    "watch": "./node_modules/.bin/webpack --watch",
+    "build": "node scripts/build.mjs",
+    "watch": "node scripts/build.mjs --watch",
     "start": "npm run watch",
-    "deploy": "npm run postversion",
-    "semantic-release": "semantic-release"
+    "test": "npm run build && c8 --check-coverage --lines 90 --reporter=text --reporter=json node --test tests/*.test.cjs",
+    "verify": "npm test && tsc -p tests/tsconfig.json && node scripts/diff-coverage.cjs",
+    "benchmark": "npm run build && node scripts/benchmark.cjs",
+    "prepack": "npm run build"
   },
   "repository": {
     "type": "git",
@@ -34,22 +35,21 @@
   },
   "homepage": "https://github.com/takenet/lime-js#readme",
   "devDependencies": {
-    "commitizen": "^2.8.2",
-    "cz-conventional-changelog": "^1.1.6",
-    "semantic-release": "^4.3.5",
-    "ts-loader": "7.0.5",
-    "typescript": "3.9.7",
-    "uglifyjs-webpack-plugin": "^2.2.0",
-    "webpack": "4.44.1",
-    "webpack-cli": "^3.3.12",
-    "@types/bluebird": "^3.5.32"
+    "typescript": "^5.9.3",
+    "esbuild": "^0.25.12",
+    "c8": "^10.1.3"
   },
-  "dependencies": {
-    "bluebird": "^3.4.0"
+  "module": "dist/lime.mjs",
+  "types": "dist/Lime/Lime.d.ts",
+  "engines": {
+    "node": ">=18"
   },
-  "config": {
-    "commitizen": {
-      "path": "./node_modules/cz-conventional-changelog"
-    }
+  "exports": {
+    ".": {
+      "types": "./dist/Lime/Lime.d.ts",
+      "import": "./dist/lime.mjs",
+      "require": "./dist/lime.js"
+    },
+    "./dist/*": "./dist/*"
   }
 }

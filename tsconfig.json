@@ -1,15 +1,20 @@
 {
-  "compileOnSave": false,
-  "buildOnSave": false,
   "compilerOptions": {
-    "target": "es5",
-    "declaration": false,
-    "sourceMap": true
+    "target": "ES2018",
+    "module": "ESNext",
+    "moduleResolution": "node",
+    "declaration": true,
+    "emitDeclarationOnly": true,
+    "outDir": "dist",
+    "rootDir": "src",
+    "strictNullChecks": false,
+    "noImplicitAny": true,
+    "lib": [
+      "ES2018",
+      "DOM"
+    ]
   },
-  "exclude": [
-    "node_modules"
-  ],
-  "atom": {
-    "rewriteTsconfig": false
-  }
+  "include": [
+    "src/**/*.ts"
+  ]
 }
