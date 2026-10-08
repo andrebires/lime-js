@@ -51,6 +51,27 @@ function stream(Lime) {
   }
   client.dispose();return {contributions:10000,characters:320000,medianMs:median(samples)};
 }
+function jsonArrays(Lime) {
+  const counts=[100,1000,10000];
+  return counts.map(items=>{
+    const samples=[];let patchBytes=0,mergeBytes=0;
+    for(let round=0;round<8;round++){
+      const a=new Lime.MessageAssembler();const start=performance.now();
+      a.accept({id:'array',type:'json',stream:'start'});
+      a.accept({id:'array',stream:'data',content:[{op:'add',path:'/items',value:[]}]});
+      for(let i=0;i<items;i++)a.accept({id:'array',stream:'data',content:[{op:'add',path:'/items/-',value:{id:i}}]});
+      const result=a.accept({id:'array',stream:'end'}).content;assert.equal(result.items.length,items);assert.equal(result.items.at(-1).id,items-1);
+      if(round)samples.push(performance.now()-start);
+    }
+    const values=[];patchBytes=Buffer.byteLength(JSON.stringify([{op:'add',path:'/items',value:[]}]));
+    for(let i=0;i<items;i++){
+      const value={id:i};values.push(value);
+      patchBytes+=Buffer.byteLength(JSON.stringify([{op:'add',path:'/items/-',value}]));
+      mergeBytes+=Buffer.byteLength(JSON.stringify({items:values}));
+    }
+    return {items,medianMs:median(samples),jsonPatchContributionBytes:patchBytes,mergePatchReplacementBytes:mergeBytes};
+  });
+}
 (async()=>{
   const result={node:process.version,platform:process.platform,arch:process.arch,samples:7,warmups:1};
   for(const [name,path] of [['current',current],...(baseline?[['baseline',baseline]]:[])]) {
@@ -58,7 +79,7 @@ function stream(Lime) {
     if(name === "baseline") global.window = global;
     const Lime=require(path);const min=readFileSync(join(dirname(path),'lime.min.js'));
     result[name]={minifiedBytes:min.length,gzipBytes:gzipSync(min,{level:9}).length,commandRoundTrips:await commands(Lime),completeMessageReceive:receive(Lime,2)};
-    if(name==='current') {result[name].legacyMessageReceive=receive(Lime,1);result[name].textStream=stream(Lime);}
+    if(name==='current') {result[name].legacyMessageReceive=receive(Lime,1);result[name].textStream=stream(Lime);result[name].jsonArrayStream=jsonArrays(Lime);}
   }
   console.log(JSON.stringify(result,null,2));
 })().finally(()=>{for(const timer of Array.from(timers))global.clearTimeout(timer);global.setTimeout=realSetTimeout;global.clearTimeout=realClearTimeout;if(originalWindow)Object.defineProperty(global,"window",originalWindow);else delete global.window;});

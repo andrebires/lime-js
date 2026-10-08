@@ -1,9 +1,9 @@
 # LIME 2 v0.1 client implementation
 
 Implemented task: LIME2-01. Source: the supplied
-`fast-chat/docs/specifications/lime-2-v0.1-draft.md`, dated 2026-10-07.
+`fast-chat/docs/specifications/lime-2-v0.1-draft.md`, updated 2026-10-08.
 Source SHA-256:
-`366951a4fc9607ead4d9bc497a4a5544d724206c26f323b2c023ebb4056f4294`.
+`4ed690d2c0192ae374355996291926aa8b9c553d74f82590f23057e45cbb3f6e`.
 This implements selected draft rules and documents local policy; it does not
 freeze the draft or certify independent-server interoperability.
 
@@ -14,7 +14,7 @@ freeze the draft or certify independent-server interoperability.
 | 2: sessions | Explicit version 2; direct establishment, optional transport negotiation and fallback LIME authentication; server-issued IDs; bounded exchanges; terminal state cannot reopen; no automatic downgrade/resume. |
 | 3–4: messages | Optional IDs on complete messages; positive safe-integer revisions default to 1 independently on every envelope; thread context; start/data/end; no native multipart. |
 | 4.1: text | Decoded contributions are accumulated and joined only at terminal completion; raw progress callbacks avoid repeated full snapshots. |
-| 4.2: JSON | Fresh empty object per stream/revision; RFC 7396 merge/delete/replace; scalar and array replacements; prototype-shaped keys treated as JSON data. |
+| 4.2: JSON | Fresh empty object per stream/revision; RFC 6902 add/remove/replace/move/copy/test; incremental arrays and literal null; prototype-shaped keys treated as JSON data. |
 | 5: notifications | Received/consumed/failed event and scope validation; exact revision and peer correlation; individual and cumulative session receipts; incomplete-prefix rejection; no read/failure clearing of transport buffers. |
 | 5.1: retries | Bounded in-memory logical-message buffer; same-ID/revision complete replay; bounded automatic attempts; explicit retry API; exhaustion remains unacknowledged. |
 | 6: aliases | All nine enumerated built-ins; canonical MIME resolution; no second parsing or rewriting of nested MIME fields; local additive session registry. |
@@ -84,17 +84,17 @@ with deterministic local contracts, without a live historical server.
 
 ## Verification and measured performance
 
-`npm run verify` passes 51 deterministic tests: selected wire semantics, RFC 7396
-appendix fixtures, independent UTF-8 byte-count bounds, malformed/rejected input,
+`npm run verify` passes 54 deterministic tests: selected wire semantics, shared RFC 6902
+operation and rejection fixtures, independent UTF-8 byte-count bounds, malformed/rejected input,
 peer and revision isolation, cumulative gaps, bounded timer-controlled retries,
 command cleanup, delayed terminal establishment, and serialized bidirectional
 transport contracts (including lost end frames and lost receipts). Package checks
 cover native ESM/CommonJS imports, UMD browser/AMD execution in VM contexts, and a
 strict TypeScript consumer. Node 20.20.2 passes UUID/establishment smoke checks
-and all 20 package, streaming, and transport contract tests. `npm pack --dry-run` checks shipped bundles and types.
+and all 23 package, streaming, and transport contract tests. `npm pack --dry-run` checks shipped bundles and types.
 
-Final verification: 99.08% total source line coverage and 98.57% changed source
-line coverage (620/629 measured changed lines). CI enforces at least 90% total
+Final verification: 99.09% total source line coverage and 99.41% changed source
+line coverage (169/170 measured changed lines). CI enforces at least 90% total
 and changed source line coverage. Declaration-only
 TypeScript emits no executable code and is excluded naturally; missing coverage
 for changed executable source fails closed. Benchmark results below are local
@@ -106,18 +106,46 @@ between rounds; it does not change the library's command resolution behavior.
 
 | Measurement | Original | New client |
 | --- | ---: | ---: |
-| Minified bytes | 96,945 | 23,722 |
-| Gzip bytes, level 9 | 27,035 | 7,563 |
-| 5,000 in-memory command round trips | 31.55 ms | 2.36 ms |
+| Minified bytes | 96,945 | 27,727 |
+| Gzip bytes, level 9 | 27,035 | 8,706 |
+| 5,000 in-memory command round trips | 28.63 ms | 1.87 ms |
 | Timers still alive after those responses | 5,000 | 0 |
-| 100,000 complete-message receives | 0.64 ms | 11.34 ms, strict LIME 2 |
-| 100,000 legacy pass-through receives | 0.64 ms | 0.76 ms, LIME 1 mode |
-| 10,000 text contributions / 320,000 characters | Unsupported | 2.71 ms |
+| 100,000 complete-message receives | 0.60 ms | 10.74 ms, strict LIME 2 |
+| 100,000 legacy pass-through receives | 0.60 ms | 0.74 ms, LIME 1 mode |
+| 10,000 text contributions / 320,000 characters | Unsupported | 2.66 ms |
 
-The gzip bundle is 72.0% smaller. Command resolution is substantially
+The gzip bundle is 67.8% smaller. Command resolution is substantially
 faster and no longer retains successful-request timers. LIME 2 validation,
 byte limits, normalization and content ownership cost more CPU than the original
 unvalidated receive path; the table retains that comparison. These measurements
 are not production latency, mobile battery or real-network load claims. Full
 benchmark data and reproduction instructions are in
 [benchmark-results.json](benchmark-results.json) and the [README](../README.md).
+
+## RFC 6902 adoption, 2026-10-08
+
+LIME2-03 supersedes the earlier Merge Patch message-stream contract. Structured
+data is an operation array; the final MIME type still names the document.
+Fresh {} per revision and whole-message retry remain in force. Patches are ordered
+and not generally idempotent. JSON-streaming peers must migrate together; there
+is no implicit old-format fallback. Streamed commands in the newer draft are not
+implemented by this JS runtime.
+
+The default batch bound is 256 operations, with result depth/size and cumulative
+input plus copy/move work bounds. Invalid batches abandon the provisional stream.
+The implementation caches subtree byte sizes and updates only affected ancestors,
+so fixed-depth array append avoids copying/serializing prior items. The Go demo
+uses a generated copy of this patch engine, with the same shared conformance
+vectors. No additional runtime dependency is introduced.
+
+| Items appended | JS assembly median | Patch contribution bytes | Merge Patch growing-array replacement bytes |
+| --- | ---: | ---: | ---: |
+| 100 | 0.21 ms | 5,031 | 50,645 |
+| 1,000 | 1.34 ms | 50,931 | 5,411,495 |
+| 10,000 | 13.04 ms | 518,931 | 589,574,495 |
+
+Payload totals count uncompressed JSON content only, excluding envelope/network
+overhead. The Merge Patch column analytically serializes the equivalent growing
+array at every item; it is not a measured old-client runtime. These fixtures
+append one item per contribution; batching changes the trade-off. The minified
+gzip bundle grows from 7,563 to 8,706 bytes versus the previous Merge Patch client.

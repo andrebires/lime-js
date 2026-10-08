@@ -59,8 +59,14 @@ neither. Sending end asserts successful persisted completion: callers must not
 use it merely because generation or the transport stopped.
 
 Text contributions concatenate. JSON streams start at `{}` and apply
-[RFC 7396 JSON Merge Patch](https://www.rfc-editor.org/rfc/rfc7396.html): object
-members merge, null members delete, arrays/scalars replace. JSON-looking text
+[RFC 6902 JSON Patch](https://www.rfc-editor.org/rfc/rfc6902.html): each data
+content is an operation array. All six operations and RFC 6901 pointers are
+supported, including array append `/-` and literal null values. Delete explicitly
+with `remove`; replace the root with `path: ""`. Invalid batches abandon the
+provisional stream. A removed root must be restored before end. Patch data is
+order-dependent and must never be retried independently; replay complete content.
+This changes the earlier draft wire format: upgrade JSON-streaming peers together.
+No payload-shape fallback to Merge Patch is performed. JSON-looking text
 is never automatically parsed a second time.
 
 `onMessage` receives only complete messages, with canonical MIME types.
@@ -110,6 +116,7 @@ const client = new ClientChannel(transport, true, undefined, {
   maxStreams: 64,
   maxContentBytes: 1048576,
   maxJsonDepth: 64,
+  maxPatchOperations: 256,
   maxPendingMessages: 256,
   maxPendingCommands: 256,
   retryInterval: 5000,   // 0 disables automatic scheduling
@@ -174,3 +181,10 @@ LIME_BASELINE_BUNDLE=/path/to/original/dist/lime.js npm run benchmark
 
 See [implementation choices and measured evidence](docs/lime-2-client.md),
 [benchmark data](docs/benchmark-results.json), and [backlog](BACKLOG.md).
+
+
+JSON Patch processing bounds each batch's operation count (`maxPatchOperations`),
+assembled content size and result depth. The cumulative stream budget also counts
+incoming patch bytes and bytes cloned by copy/move. Owned subtree sizes are cached;
+array append updates only its ancestor path, avoiding a full-document copy or
+serialization on every contribution. Complete content is returned only at end.
