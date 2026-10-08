@@ -8,16 +8,13 @@ interface Envelope {
   pp?: string;
   metadata?: any;
 }
-
+const has = (value: Envelope, key: string): boolean =>
+  value != null && Object.prototype.hasOwnProperty.call(value, key);
 const Envelope = {
-  isMessage: (envelope: Envelope) => envelope.hasOwnProperty('content'),
-  isNotification: (envelope: Envelope) => envelope.hasOwnProperty('event'),
-  isCommand: (envelope: Envelope) => envelope.hasOwnProperty('method'),
-  isSession: (envelope: Envelope) => envelope.hasOwnProperty('state')
+  isMessage: (value: Envelope) => has(value, "content") || has(value, "stream"),
+  isNotification: (value: Envelope) => has(value, "event"),
+  isCommand: (value: Envelope) => has(value, "method"),
+  isSession: (value: Envelope) => has(value, "state")
 };
-
-export interface EnvelopeListener {
-  onEnvelope(envelope: Envelope): void
-}
-
+export interface EnvelopeListener { onEnvelope(envelope: Envelope): void; }
 export default Envelope;

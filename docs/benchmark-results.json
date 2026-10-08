@@ -1,0 +1,42 @@
+{
+  "node": "v24.15.0",
+  "platform": "darwin",
+  "arch": "arm64",
+  "samples": 7,
+  "warmups": 1,
+  "current": {
+    "minifiedBytes": 23722,
+    "gzipBytes": 7563,
+    "commandRoundTrips": {
+      "commands": 5000,
+      "medianMs": 2.360624999999999,
+      "timersAfterResponses": 0
+    },
+    "completeMessageReceive": {
+      "messages": 100000,
+      "medianMs": 11.338583
+    },
+    "legacyMessageReceive": {
+      "messages": 100000,
+      "medianMs": 0.7619579999999928
+    },
+    "textStream": {
+      "contributions": 10000,
+      "characters": 320000,
+      "medianMs": 2.709625000000017
+    }
+  },
+  "baseline": {
+    "minifiedBytes": 96945,
+    "gzipBytes": 27035,
+    "commandRoundTrips": {
+      "commands": 5000,
+      "medianMs": 31.549374999999998,
+      "timersAfterResponses": 5000
+    },
+    "completeMessageReceive": {
+      "messages": 100000,
+      "medianMs": 0.6412920000000213
+    }
+  }
+}

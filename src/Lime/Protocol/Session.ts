@@ -3,6 +3,7 @@ import Reason from "./Reason";
 
 interface Session extends Envelope {
   state: SessionState;
+  version?: 1 | 2;
 
   encryptionOptions?: SessionEncryption[];
   encryption?: SessionEncryption;
