@@ -101,3 +101,11 @@ test('channel preserves explicit incoming recipients and outgoing senders for ro
  const p=client.processCommand({id:'outgoing',method:'set',uri:'/x',type:'text',stream:'start',from:'client@example/browser'});const failure=assert.rejects(p,/routing changed/);
  assert.throws(()=>client.sendCommand({id:'outgoing',method:'set',stream:'data',resource:'x',from:'client@example'}),/routing changed/);await failure;assert.equal(transport.sent.length,1);assert.equal(client.pendingCommandCount,0);assert.equal(client.activeCommandCount,0);client.dispose();
 });
+
+test('timeout cleanup snapshots routing identity before callers or progress callbacks mutate frames',async t=>{
+ t.mock.timers.enable({apis:['setTimeout']});const {client,transport}=channel({commandStreamTimeout:10});const expired=[];client.onCommandError=(e,c)=>expired.push(c.id);
+ const request={id:'original',method:'set',uri:'/x',type:'text',stream:'start'};const p=client.processCommand(request,10);const rejected=assert.rejects(p,/original.*unconfirmed/);
+ request.id='mutated';request.to='stranger';t.mock.timers.tick(10);await rejected;assert.equal(client.pendingCommandCount,0);assert.equal(client.activeCommandCount,0);
+ client.onCommandProgress=c=>{c.id='changed';c.from='stranger';};
+ transport.receive({id:'remote',method:'set',uri:'/x',type:'text',stream:'start'});t.mock.timers.tick(10);assert.deepEqual(expired,['remote']);assert.equal(client.activeCommandCount,0);client.dispose();
+});

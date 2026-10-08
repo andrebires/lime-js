@@ -227,11 +227,12 @@ export default abstract class Channel implements MessageChannel, CommandChannel,
     if (this.commands.has(command.id)) throw new Error("Command id is already pending");
     if (this.commands.size >= this.maxPendingCommands) throw new Error("Pending command capacity exceeded");
     if (!Number.isFinite(timeout) || timeout < 0 || timeout > 2147483647) throw new Error("Invalid command timeout");
+    const identity: Command = { id: command.id, method: command.method, to: command.to?.toString() || this.remoteNode };
     return new Promise((resolve, reject) => {
       const timer = setTimeout(() => {
-        this.commands.delete(command.id);
-        this.dropCommand(command, "outgoing");
-        reject(new Error(`Command ${command.id} processing timed out; outcome is unconfirmed`));
+        this.commands.delete(identity.id);
+        this.dropCommand(identity, "outgoing");
+        reject(new Error(`Command ${identity.id} processing timed out; outcome is unconfirmed`));
       }, timeout);
       this.commands.set(command.id, { resolve, reject, timer, recipient: command.to ? command.to.toString() : this.remoteNode || "", method: command.method });
       try { this.sendCommand(command); }
@@ -279,9 +280,10 @@ export default abstract class Channel implements MessageChannel, CommandChannel,
     // A processCommand promise already owns an absolute request deadline.
     const peer = direction === "incoming" ? context.from : context.to?.toString();
     if (this.commands.get(command.id)?.recipient === peer || this.commandTimers.has(key)) return;
+    const identity: Command = { id: command.id, method: command.method, from: context.from, to: context.to?.toString() };
     const timer = setTimeout(() => {
-      this.dropCommand(command, direction);
-      this.onCommandError(new Error("Command exchange timed out; outcome is unconfirmed"), command);
+      this.dropCommand(identity, direction);
+      this.onCommandError(new Error("Command exchange timed out; outcome is unconfirmed"), identity);
     }, this.commandStreamTimeout);
     this.commandTimers.set(key, timer); (timer as any).unref?.();
   }
