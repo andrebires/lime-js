@@ -72,6 +72,18 @@ function jsonArrays(Lime) {
     return {items,medianMs:median(samples),jsonPatchContributionBytes:patchBytes,mergePatchReplacementBytes:mergeBytes};
   });
 }
+function commandTextStream(Lime) {
+  const samples=[];
+  for(let round=0;round<8;round++) {
+    const a=new Lime.CommandAssembler();const start=performance.now();
+    a.accept({id:'c',method:'set',uri:'/benchmark',type:'text',stream:'start'},'incoming');
+    for(let i=0;i<100;i++)a.accept({id:'c',method:'set',stream:'data',resource:'hello'},'incoming');
+    const result=a.accept({id:'c',method:'set',stream:'end'},'incoming');assert.equal(result.command.resource,'hello'.repeat(100));
+    a.accept({id:'c',method:'set',status:'success'},'outgoing');assert.equal(a.size,0);
+    if(round)samples.push(performance.now()-start);
+  }
+  return {contributions:100,characters:500,medianMs:median(samples)};
+}
 (async()=>{
   const result={node:process.version,platform:process.platform,arch:process.arch,samples:7,warmups:1};
   for(const [name,path] of [['current',current],...(baseline?[['baseline',baseline]]:[])]) {
@@ -79,7 +91,7 @@ function jsonArrays(Lime) {
     if(name === "baseline") global.window = global;
     const Lime=require(path);const min=readFileSync(join(dirname(path),'lime.min.js'));
     result[name]={minifiedBytes:min.length,gzipBytes:gzipSync(min,{level:9}).length,commandRoundTrips:await commands(Lime),completeMessageReceive:receive(Lime,2)};
-    if(name==='current') {result[name].legacyMessageReceive=receive(Lime,1);result[name].textStream=stream(Lime);result[name].jsonArrayStream=jsonArrays(Lime);}
+    if(name==='current') {result[name].legacyMessageReceive=receive(Lime,1);result[name].textStream=stream(Lime);result[name].jsonArrayStream=jsonArrays(Lime);result[name].commandTextStream=commandTextStream(Lime);}
   }
   console.log(JSON.stringify(result,null,2));
 })().finally(()=>{for(const timer of Array.from(timers))global.clearTimeout(timer);global.setTimeout=realSetTimeout;global.clearTimeout=realClearTimeout;if(originalWindow)Object.defineProperty(global,"window",originalWindow);else delete global.window;});

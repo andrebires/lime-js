@@ -42,3 +42,12 @@
 - Acceptance: all six RFC operations, strict pointers/indices, atomic stream rejection, bounded operations/content/depth/copy work, ownership isolation, whole-message retry contracts, at least 90% changed-line coverage, and measured array streaming.
 - Scope: JSON message assembly; complete JSON and LIME 1 mode retain their semantics. Streamed commands remain outside the current JS runtime.
 - Evidence: 54 tests pass, 99.09% total lines / 99.41% changed lines (169/170), package dry run and array benchmarks pass. Shared vectors match Go and the live browser engine.
+
+## LIME2-04 — Stream command requests and responses
+
+- Status: Completed
+- Authority: user implementation request, 2026-10-08; draft sections 7.0 and 7.2.
+- Outcome: text/JSON Patch command streams, strict grammar, correlated independent request/response state, terminal success/failure and complete command interoperability.
+- Acceptance: no invocation before request end, no response completion before terminal status, bounded exchanges and timeout/disconnect/error cleanup, peer/method/direction isolation, no message receipts/retries, shared wire fixtures, serialized integration tests, package/type checks and >=90% changed-line coverage.
+- Profile: support both command directions by convention; no speculative capability fields or automatic command retry. Absolute deadlines report unconfirmed outcome.
+- Evidence: 66 tests pass, 39 shared command vectors, serialized transport contracts and controlled timeout/rejection/disconnect checks; 99.22% source lines and 224/224 changed lines (100%). Native Node 20 passes 35 package/stream/transport tests; generated types and package dry run pass. Current benchmark costs are recorded in docs/lime-2-client.md.

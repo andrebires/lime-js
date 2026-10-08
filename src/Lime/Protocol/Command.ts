@@ -2,13 +2,13 @@ import Envelope from "./Envelope";
 import Reason from "./Reason";
 
 interface Command extends Envelope {
+  stream?: CommandStream;
   uri?: string;
   type?: string;
   resource?: any;
   method: CommandMethod;
   status?: CommandStatus;
   reason?: Reason;
-  timeout?: boolean;
 }
 export default Command;
 
@@ -43,3 +43,6 @@ export type CommandStatus
   = "success"
   | "failure"
   ;
+
+export type CommandStream = "start" | "data" | "end";
+export const CommandStream = { START: "start" as CommandStream, DATA: "data" as CommandStream, END: "end" as CommandStream };

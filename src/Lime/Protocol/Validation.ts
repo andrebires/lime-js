@@ -7,6 +7,7 @@ export function revision(value: { rev?: number }): number {
   return rev;
 }
 export function validateMessage(message: Message): void {
+  if (has(message, "resource")) throw new Error("Resource is not permitted on a message");
   revision(message);
   if (message.thread !== undefined && (typeof message.thread !== "string" || !message.thread)) throw new Error("Invalid thread");
   if (message.id !== undefined && (typeof message.id !== "string" || !message.id)) throw new Error("Invalid message id");
