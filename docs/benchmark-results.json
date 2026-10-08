@@ -5,42 +5,42 @@
   "samples": 7,
   "warmups": 1,
   "current": {
-    "minifiedBytes": 35311,
-    "gzipBytes": 10443,
+    "minifiedBytes": 35325,
+    "gzipBytes": 10442,
     "commandRoundTrips": {
       "commands": 5000,
-      "medianMs": 7.754125000000002,
+      "medianMs": 7.788207999999997,
       "timersAfterResponses": 0
     },
     "completeMessageReceive": {
       "messages": 100000,
-      "medianMs": 10.55125000000001
+      "medianMs": 10.818583000000004
     },
     "legacyMessageReceive": {
       "messages": 100000,
-      "medianMs": 0.7694170000000042
+      "medianMs": 0.7127499999999998
     },
     "textStream": {
       "contributions": 10000,
       "characters": 320000,
-      "medianMs": 2.8718749999999886
+      "medianMs": 3.004415999999992
     },
     "jsonArrayStream": [
       {
         "items": 100,
-        "medianMs": 0.2050830000000019,
+        "medianMs": 0.21279200000000742,
         "jsonPatchContributionBytes": 5031,
         "mergePatchReplacementBytes": 50645
       },
       {
         "items": 1000,
-        "medianMs": 1.4904999999999973,
+        "medianMs": 1.4407089999999982,
         "jsonPatchContributionBytes": 50931,
         "mergePatchReplacementBytes": 5411495
       },
       {
         "items": 10000,
-        "medianMs": 13.456084000000033,
+        "medianMs": 13.345458000000008,
         "jsonPatchContributionBytes": 518931,
         "mergePatchReplacementBytes": 589574495
       }
@@ -48,7 +48,7 @@
     "commandTextStream": {
       "contributions": 100,
       "characters": 500,
-      "medianMs": 0.07691599999998289
+      "medianMs": 0.08404199999995399
     }
   },
   "baseline": {
@@ -56,12 +56,12 @@
     "gzipBytes": 27035,
     "commandRoundTrips": {
       "commands": 5000,
-      "medianMs": 29.52145900000005,
+      "medianMs": 33.13345800000002,
       "timersAfterResponses": 5000
     },
     "completeMessageReceive": {
       "messages": 100000,
-      "medianMs": 0.5879999999999654
+      "medianMs": 0.6118750000000546
     }
   }
 }

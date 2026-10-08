@@ -84,14 +84,14 @@ with deterministic local contracts, without a live historical server.
 
 ## Verification and measured performance
 
-`npm run verify` passes 64 deterministic tests: selected wire semantics, shared RFC 6902
+`npm run verify` passes 65 deterministic tests: selected wire semantics, shared RFC 6902
 operation and rejection fixtures, independent UTF-8 byte-count bounds, malformed/rejected input,
 peer and revision isolation, cumulative gaps, bounded timer-controlled retries,
 command cleanup, delayed terminal establishment, and serialized bidirectional
 transport contracts (including lost end frames and lost receipts). Package checks
 cover native ESM/CommonJS imports, UMD browser/AMD execution in VM contexts, and a
 strict TypeScript consumer. Node 20.20.2 passes UUID/establishment smoke checks
-and all 33 package, streaming, and transport contract tests. `npm pack --dry-run` checks shipped bundles and types.
+and all 34 package, streaming, and transport contract tests. `npm pack --dry-run` checks shipped bundles and types.
 
 Final verification: 99.22% total source line coverage and 100% changed source
 line coverage (221/221 measured changed lines). The verification command enforces at least 90% total
@@ -106,13 +106,13 @@ between rounds; it does not change the library's command resolution behavior.
 
 | Measurement | Original | New client |
 | --- | ---: | ---: |
-| Minified bytes | 96,945 | 35,311 |
-| Gzip bytes, level 9 | 27,035 | 10,443 |
-| 5,000 in-memory command round trips | 29.52 ms | 7.75 ms |
+| Minified bytes | 96,945 | 35,325 |
+| Gzip bytes, level 9 | 27,035 | 10,442 |
+| 5,000 in-memory command round trips | 33.13 ms | 7.79 ms |
 | Timers still alive after those responses | 5,000 | 0 |
-| 100,000 complete-message receives | 0.59 ms | 10.55 ms, strict LIME 2 |
-| 100,000 legacy pass-through receives | 0.59 ms | 0.77 ms, LIME 1 mode |
-| 10,000 text contributions / 320,000 characters | Unsupported | 2.87 ms |
+| 100,000 complete-message receives | 0.61 ms | 10.82 ms, strict LIME 2 |
+| 100,000 legacy pass-through receives | 0.61 ms | 0.71 ms, LIME 1 mode |
+| 10,000 text contributions / 320,000 characters | Unsupported | 3.00 ms |
 | 100 command text contributions / 500 characters, including reply | Unsupported | 0.08 ms |
 
 The gzip bundle is 61.4% smaller. Command resolution is substantially
@@ -141,8 +141,8 @@ vectors. No additional runtime dependency is introduced.
 | Items appended | JS assembly median | Patch contribution bytes | Merge Patch growing-array replacement bytes |
 | --- | ---: | ---: | ---: |
 | 100 | 0.21 ms | 5,031 | 50,645 |
-| 1,000 | 1.49 ms | 50,931 | 5,411,495 |
-| 10,000 | 13.46 ms | 518,931 | 589,574,495 |
+| 1,000 | 1.44 ms | 50,931 | 5,411,495 |
+| 10,000 | 13.35 ms | 518,931 | 589,574,495 |
 
 Payload totals count uncompressed JSON content only, excluding envelope/network
 overhead. The Merge Patch column analytically serializes the equivalent growing
@@ -167,10 +167,10 @@ own schema validation and execution authority. 39 shared Go/JS fixtures, seriali
 bidirectional transports, early rejection, malformed-family isolation, peer/method
 checks, deterministic deadlines and terminal cleanup verify these rules.
 
-The stricter complete-command path now measures 7.75 ms for
+The stricter complete-command path now measures 7.79 ms for
 5,000 local round trips versus 1.87 ms in the preceding JSON Patch client run;
 these are separate synthetic runs, not a controlled production latency result.
-The gzip bundle grows from 8,706 to 10,443 bytes. This cost buys strict
+The gzip bundle grows from 8,706 to 10,442 bytes. This cost buys strict
 exchange correlation and support for both command stream directions. The text
 assembly engine still joins once at completion, with no whole-resource snapshots
 per contribution.

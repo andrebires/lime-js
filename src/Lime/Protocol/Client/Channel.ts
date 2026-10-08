@@ -251,10 +251,10 @@ export default abstract class Channel implements MessageChannel, CommandChannel,
     } catch (error) { this.dropCommand(command, "outgoing", error as Error); throw error; }
   }
   private normalizedCommand(command: Command): Command {
-    return { ...command, from: command.from || this.remoteNode, to: this.localNode };
+    return { ...command, from: command.from || this.remoteNode, to: command.to || this.localNode };
   }
   private commandContext(command: Command, direction: "incoming" | "outgoing"): Command {
-    return direction === "incoming" ? this.normalizedCommand(command) : { ...command, from: this.localNode, to: command.to || this.remoteNode };
+    return direction === "incoming" ? this.normalizedCommand(command) : { ...command, from: command.from || this.localNode, to: command.to || this.remoteNode };
   }
   private commandTimerKey(command: Command, direction: "incoming" | "outgoing"): string {
     const value = this.commandContext(command, direction);

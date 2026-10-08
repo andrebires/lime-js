@@ -91,3 +91,13 @@ test('rejected provisional requests and competing families cannot invoke a later
  transport.receive({id:'mixed',method:'set',uri:'/x',type:'text',stream:'start'});transport.receive({id:'mixed',method:'set',stream:'data',resource:'x',content:'x'});transport.receive({id:'mixed',method:'set',stream:'end'});
  assert.equal(commands.length,0);assert.equal(client.activeCommandCount,0);assert.equal(errors.length,3);client.dispose();
 });
+
+test('channel preserves explicit incoming recipients and outgoing senders for routing rejection',async()=>{
+ const {client,transport,commands,errors}=channel();
+ transport.receive({id:'incoming',method:'set',uri:'/x',type:'text',stream:'start',to:'client@example'});
+ transport.receive({id:'incoming',method:'set',stream:'data',resource:'x',to:'client@example/browser'});
+ transport.receive({id:'incoming',method:'set',stream:'end'});
+ assert.equal(commands.length,0);assert.equal(errors.length,2);assert.match(errors[0].error.message,/routing changed/);assert.equal(client.activeCommandCount,0);
+ const p=client.processCommand({id:'outgoing',method:'set',uri:'/x',type:'text',stream:'start',from:'client@example/browser'});const failure=assert.rejects(p,/routing changed/);
+ assert.throws(()=>client.sendCommand({id:'outgoing',method:'set',stream:'data',resource:'x',from:'client@example'}),/routing changed/);await failure;assert.equal(transport.sent.length,1);assert.equal(client.pendingCommandCount,0);assert.equal(client.activeCommandCount,0);client.dispose();
+});
