@@ -28,47 +28,53 @@ test('stream only completes on end; receipt carries revision and uses implicit p
   assert.deepEqual(transport.sent, [{id:'m',rev:2,to:'server@example',event:'received'}]);
   assert.equal(progress.length, 4); assert.equal(errors.length, 0);
 });
-test('JSON streams start fresh per revision and implement RFC 7396 merge/delete/replace', () => {
-  const { transport, messages } = channel();
-  const start = rev => transport.receive({id:'m',rev,type:'select',stream:'start'});
-  const data = (rev,content) => transport.receive({id:'m',rev,content,stream:'data'});
-  const end = rev => transport.receive({id:'m',rev,stream:'end'});
-  start(1); data(1,{text:'Pick', nested:{a:1,b:2},options:[1]});
-  data(1,{nested:{a:null,c:3},options:[2,3]}); end(1);
-  assert.deepEqual(messages[0].content,{text:'Pick',nested:{b:2,c:3},options:[2,3]});
-  start(2); data(2,{new:true}); end(2);
-  assert.deepEqual(messages[1].content,{new:true});
-  start(3); data(3,[1,2]); data(3,null); data(3,{nested:{gone:null,kept:true}}); end(3);
-  assert.deepEqual(messages[2].content,{nested:{kept:true}});
-  start(4); end(4); assert.deepEqual(messages[3].content,{});
-  start(5); data(5,'value'); end(5); assert.equal(messages[4].content,'value');
-});
-test('RFC 7396 appendix A fixtures', () => {
-  const cases = [
-    [{a:'b'},{a:'c'},{a:'c'}], [{a:'b'},{b:'c'},{a:'b',b:'c'}], [{a:'b'},{a:null},{}],
-    [{a:'b',b:'c'},{a:null},{b:'c'}], [{a:['b']},{a:'c'},{a:'c'}], [{a:'c'},{a:['b']},{a:['b']}],
-    [{a:{b:'c'}},{a:{b:'d',c:null}},{a:{b:'d'}}], [{a:[{b:'c'}]},{a:[1]},{a:[1]}],
-    [['a','b'],['c','d'],['c','d']], [{a:'b'},['c'],['c']], [{a:'foo'},null,null],
-    [{a:'foo'},'bar','bar'], [{a:'foo'},{a:null},{}], [['a','b'],{a:'b'},{a:'b'}],
-    [{},{a:{bb:{ccc:null}}},{a:{bb:{}}}]
-  ];
-  for (const [initial,patch,expected] of cases) {
-    const assembly = new Lime.MessageAssembler();
-    assembly.accept({id:'m',type:'json',stream:'start'});
-    assembly.accept({id:'m',stream:'data',content:initial});
-    assembly.accept({id:'m',stream:'data',content:patch});
-    assert.deepEqual(assembly.accept({id:'m',stream:'end'}).content,expected);
+test('shared RFC 6902 contract vectors, ownership, fresh revisions and atomic failure', () => {
+  const vectors=require('./fixtures/json-patch-vectors.json');
+  for(const v of vectors) {
+    const a=new Lime.MessageAssembler();
+    a.accept({id:'m',type:'json',stream:'start'});
+    a.accept({id:'m',stream:'data',content:[{op:'add',path:'',value:v.target}]});
+    const input=JSON.stringify(v.patch);
+    if(v.error) {
+      assert.throws(()=>{a.accept({id:'m',stream:'data',content:v.patch});a.accept({id:'m',stream:'end'});},v.name);
+      assert.throws(()=>a.accept({id:'m',stream:'end'}),v.name);
+    } else {
+      a.accept({id:'m',stream:'data',content:v.patch});
+      assert.deepEqual(a.accept({id:'m',stream:'end'}).content,v.expected,v.name);
+    }
+    assert.equal(JSON.stringify(v.patch),input,v.name);
+    a.accept({id:'m',rev:2,type:'json',stream:'start'});
+    assert.deepEqual(a.accept({id:'m',rev:2,stream:'end'}).content,{});
   }
+  assert.equal({}.polluted,undefined);
 });
-test('JSON patch handles prototype-shaped keys as data and does not mutate caller input', () => {
-  const assembly = new Lime.MessageAssembler();
-  const patch = JSON.parse('{"__proto__":{"polluted":true},"constructor":{"prototype":{"also":true}}}');
-  assembly.accept({id:'m',type:'json',stream:'start'});
-  assembly.accept({id:'m',stream:'data',content:patch});
-  patch.__proto__.polluted = false;
-  const value = assembly.accept({id:'m',stream:'end'}).content;
-  assert.equal(value.__proto__.polluted,true); assert.equal({}.polluted,undefined);
-  assert.equal(Object.getPrototypeOf(value),Object.prototype);
+test('array streaming snapshots caller input and preserves literal null', () => {
+  const a=new Lime.MessageAssembler();const input=[{op:'add',path:'/items',value:[]}];
+  a.accept({id:'m',type:'json',stream:'start'});a.accept({id:'m',stream:'data',content:input});input[0].value.push('mutated');
+  a.accept({id:'m',stream:'data',content:[{op:'add',path:'/items/-',value:null}]});
+  assert.deepEqual(a.accept({id:'m',stream:'end'}).content,{items:[null]});
+});
+test('patch operation, assembled size, result depth and copy-work limits reject streams', () => {
+  assert.throws(()=>new Lime.MessageAssembler(undefined,{maxPatchOperations:0}));
+  const assemble=(limits,patches)=>{
+    const a=new Lime.MessageAssembler(undefined,limits);a.accept({id:'m',type:'json',stream:'start'});
+    for(const patch of patches)a.accept({id:'m',stream:'data',content:patch});
+    return a.accept({id:'m',stream:'end'}).content;
+  };
+  assert.throws(()=>assemble({maxPatchOperations:1},[[{op:'add',path:'/a',value:1},{op:'add',path:'/b',value:2}]]),/operation limit/);
+  assert.throws(()=>assemble({maxJsonDepth:2},[[{op:'add',path:'/a',value:{}},{op:'add',path:'/a/b',value:{}},{op:'add',path:'/a/b/c',value:1}]]),/nesting/);
+  assert.throws(()=>assemble({maxJsonDepth:2},[[{op:'add',path:'/a',value:{x:1}},{op:'add',path:'/b',value:{}},{op:'copy',from:'/a',path:'/b/c'}]]),/nesting/);
+  // A single compact copy batch can enlarge state beyond the document limit.
+  const value='x'.repeat(150);
+  assert.throws(()=>assemble({maxContentBytes:600},[
+    [{op:'add',path:'/a',value}],
+    [{op:'copy',from:'/a',path:'/b'},{op:'copy',from:'/a',path:'/c'},{op:'copy',from:'/a',path:'/d'}]
+  ]),/limit/);
+  assert.throws(()=>assemble({maxContentBytes:600},[
+    [{op:'add',path:'/a',value}],
+    Array.from({length:6},()=>[{op:'copy',from:'/a',path:'/b'},{op:'remove',path:'/b'}]).flat()
+  ]),/copy work/);
+  assert.deepEqual(assemble({},[[{op:'add',path:'/a',value:{x:1}},{op:'move',from:'/a/x',path:'/b'}]]),{a:{},b:1});
 });
 test('routing, revision and thread isolate simultaneous assemblies', () => {
   const { transport, messages, errors } = channel({},false);

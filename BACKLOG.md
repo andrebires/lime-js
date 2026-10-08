@@ -33,3 +33,12 @@
   cross-implementation command and negotiation contract fixtures.
 - Until then: expose a local alias registry for application-defined acknowledged
   commands; use documented streaming conventions; emit no invented wire fields.
+
+## LIME2-03 — Adopt RFC 6902 structured streaming
+
+- Status: Completed
+- Authority: user selection, 2026-10-08; supersedes RFC 7396 for streamed JSON.
+- Outcome: fresh revision assembly using JSON Patch with incremental array operations and literal null values.
+- Acceptance: all six RFC operations, strict pointers/indices, atomic stream rejection, bounded operations/content/depth/copy work, ownership isolation, whole-message retry contracts, at least 90% changed-line coverage, and measured array streaming.
+- Scope: JSON message assembly; complete JSON and LIME 1 mode retain their semantics. Streamed commands remain outside the current JS runtime.
+- Evidence: 52 tests pass, 99.09% total lines / 99.40% changed lines (167/168), package dry run and array benchmarks pass. Shared vectors match Go and the live browser engine.
