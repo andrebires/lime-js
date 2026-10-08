@@ -94,7 +94,7 @@ strict TypeScript consumer. Node 20.20.2 passes UUID/establishment smoke checks
 and all 33 package, streaming, and transport contract tests. `npm pack --dry-run` checks shipped bundles and types.
 
 Final verification: 99.22% total source line coverage and 100% changed source
-line coverage (221/221 measured changed lines). CI enforces at least 90% total
+line coverage (221/221 measured changed lines). The verification command enforces at least 90% total
 and changed source line coverage. Declaration-only
 TypeScript emits no executable code and is excluded naturally; missing coverage
 for changed executable source fails closed. Benchmark results below are local
@@ -174,3 +174,12 @@ The gzip bundle grows from 8,706 to 10,443 bytes. This cost buys strict
 exchange correlation and support for both command stream directions. The text
 assembly engine still joins once at completion, with no whole-resource snapshots
 per contribution.
+
+A live interoperability smoke check also passed using the Node 24 JavaScript
+client and Go Conn/CommandAssembler over a loopback WebSocket fixture with
+transport-established identity. JSON Patch input retained array elements and
+literal null; text input assembled Hello world!; both used independently streamed
+JSON responses. A separate complete probe returned zero handler invocations
+before request end. Terminal results cleared both exchange counts, with no
+message receipts or pending message entries. This verifies the command contract;
+it does not certify every authentication or external-transport profile.
