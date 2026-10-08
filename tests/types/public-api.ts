@@ -19,3 +19,13 @@ const assembler = new Lime.MessageAssembler(undefined, content);
 const auth = new Lime.ExternalAuthentication('token', 'issuer');
 const method: Lime.CommandMethod = 'merge';
 void [result, session, assembler, auth, method];
+
+const commandStart: Lime.Command = {id:'stream',method:'set',uri:'/x',type:'json',stream:Lime.CommandStream.START};
+const streamedResult: Promise<Lime.Command> = client.processCommand(commandStart);
+client.sendCommand({id:'stream',method:'set',stream:'data',resource:[{op:'add',path:'/x',value:null}]});
+client.sendCommand({id:'stream',method:'set',stream:'end'});
+client.onCommandProgress = (command,response) => console.log(command.stream,response);
+client.onCommandError = (error,command) => console.log(error.message,command.id);
+const commands = new Lime.CommandAssembler();
+const assembled: Lime.CommandAssemblyResult = commands.accept(commandStart,'outgoing');
+void [streamedResult,assembled,client.activeCommandCount];

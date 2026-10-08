@@ -177,7 +177,7 @@ test('invalid client options and send messages fail before sending', () => {
   const {client:c,transport:t}=channel();
   assert.throws(()=>c.sendMessage({id:'m',type:'invented',content:1})); assert.equal(c.pendingMessageCount,0);
   c.sendMessage({type:'text',content:'fire and forget'}); assert.equal(c.pendingMessageCount,0);
-  c.dispose(); assert.throws(()=>c.sendMessage(msg('m'))); assert.throws(()=>c.sendCommand({method:'get'}));
+  c.dispose(); assert.throws(()=>c.sendMessage(msg('m'))); assert.throws(()=>c.sendCommand({method:'get',uri:'/test'}));
   const before=t.sent.length; t.receive(msg('incoming')); assert.equal(t.sent.length,before);
 });
 test('command correlation is safe for prototype keys, reuses ids after response, and honors source/recipient', async () => {
@@ -186,7 +186,7 @@ test('command correlation is safe for prototype keys, reuses ids after response,
   t.receive({id:'__proto__',method:'get',status:'success',from:'wrong'});
   t.receive({id:'__proto__',method:'get',status:'success',from:'other@example',to:'someone'});
   assert.equal(c.pendingCommandCount,1); assert.equal(commands.length,2);
-  t.receive({id:'__proto__',method:'get',status:'success',from:'other@example',resource:42});
+  t.receive({id:'__proto__',method:'get',status:'success',from:'other@example',type:'json',resource:42});
   assert.equal((await p).resource,42); assert.equal(c.pendingCommandCount,0);
   const p2=c.processCommand({id:'__proto__',method:'get',uri:'/test'});
   t.receive({id:'__proto__',method:'get',status:'failure',reason:{code:61}});
@@ -194,22 +194,22 @@ test('command correlation is safe for prototype keys, reuses ids after response,
 });
 test('command timeout uses controlled time, clears its entry, and does not leak command resource data', async t => {
   t.mock.timers.enable({apis:['setTimeout']}); const {client:c}=channel();
-  const p=c.processCommand({id:'x',method:'set',uri:'/private',resource:{secret:'sensitive'}},25);
+  const p=c.processCommand({id:'x',method:'set',uri:'/private',type:'json',resource:{secret:'sensitive'}},25);
   const failure=assert.rejects(p,error=>/timed out/.test(error.message)&&!error.message.includes('sensitive'));
   t.mock.timers.tick(25); await failure; assert.equal(c.pendingCommandCount,0); c.dispose();
 });
 test('response cancels command timeout; synchronous send errors and dispose reject cleanly', async t => {
   t.mock.timers.enable({apis:['setTimeout']}); const {client:c,transport:transport}=channel();
-  const p=c.processCommand({id:'m',method:'get'},10); transport.receive({id:'m',method:'get',status:'success'}); await p;
+  const p=c.processCommand({id:'m',method:'get',uri:'/test'},10); transport.receive({id:'m',method:'get',status:'success'}); await p;
   t.mock.timers.tick(100); assert.equal(c.pendingCommandCount,0);
-  transport.failSend=true; await assert.rejects(c.processCommand({id:'m',method:'get'}),/send failed/); assert.equal(c.pendingCommandCount,0);
-  transport.failSend=false; const pending=c.processCommand({id:'m',method:'get'}); const rejected=assert.rejects(pending,/disposed/); c.dispose(); await rejected;
+  transport.failSend=true; await assert.rejects(c.processCommand({id:'m',method:'get',uri:'/test'}),/send failed/); assert.equal(c.pendingCommandCount,0);
+  transport.failSend=false; const pending=c.processCommand({id:'m',method:'get',uri:'/test'}); const rejected=assert.rejects(pending,/disposed/); c.dispose(); await rejected;
 });
 test('command validation bounds correlation and rejects duplicate in-flight identifiers', async () => {
   const {client:c}=channel({maxPendingCommands:1});
-  for (const [cmd,timeout] of [[{id:1,method:'get'},1],[{method:'get'},1],[{id:'m',method:'get',status:'success'},1],[{id:'m',method:'get'},-1],[{id:'m',method:'get'},Infinity],[{id:'m',method:'get'},2147483648]]) assert.throws(()=>c.processCommand(cmd,timeout));
-  const pending=c.processCommand({id:'m',method:'get'}); const rejected=assert.rejects(pending,/disposed/);
-  assert.throws(()=>c.processCommand({id:'m',method:'get'}),/already/); assert.throws(()=>c.processCommand({id:'n',method:'get'}),/capacity/);
+  for (const [cmd,timeout] of [[{id:1,method:'get',uri:'/test'},1],[{method:'get',uri:'/test'},1],[{id:'m',method:'get',status:'success'},1],[{id:'m',method:'get',uri:'/test'},-1],[{id:'m',method:'get',uri:'/test'},Infinity],[{id:'m',method:'get',uri:'/test'},2147483648]]) assert.throws(()=>c.processCommand(cmd,timeout));
+  const pending=c.processCommand({id:'m',method:'get',uri:'/test'}); const rejected=assert.rejects(pending,/disposed/);
+  assert.throws(()=>c.processCommand({id:'m',method:'get',uri:'/test'}),/already/); assert.throws(()=>c.processCommand({id:'n',method:'get',uri:'/test'}),/capacity/);
   c.dispose(); await rejected;
 });
 test('ping replies match exact identity or instance boundary and never use a prefix identity match', () => {
@@ -217,7 +217,7 @@ test('ping replies match exact identity or instance boundary and never use a pre
   const ping={id:'p',method:'get',uri:'/ping',from:'server@example'};
   t.receive({...ping,to:'client@example'}); assert.equal(t.sent.length,1); assert.equal(t.sent[0].status,'success');
   t.receive({...ping,to:'client@exam'}); assert.equal(t.sent.length,1);
-  t.receive({...ping,status:'success'}); assert.equal(t.sent.length,1); assert.equal(commands.length,3); c.dispose();
+  t.receive({id:ping.id,method:ping.method,status:'success'}); assert.equal(t.sent.length,1); assert.equal(commands.length,3); c.dispose();
 });
 test('session exchange timeout is deterministic, terminal, and closes transport', async t => {
   t.mock.timers.enable({apis:['setTimeout']});

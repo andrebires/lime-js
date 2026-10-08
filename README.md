@@ -119,6 +119,7 @@ const client = new ClientChannel(transport, true, undefined, {
   maxPatchOperations: 256,
   maxPendingMessages: 256,
   maxPendingCommands: 256,
+  commandStreamTimeout: 30000, // absolute lifetime for remote/raw-send exchanges
   retryInterval: 5000,   // 0 disables automatic scheduling
   maxRetryAttempts: 3,
   sessionTimeout: 10000 // per establishment/negotiation/authentication/close exchange
@@ -134,7 +135,7 @@ recovery. Invalid streams are abandoned and cannot produce successful receipts.
 
 `processCommand` resolves command responses, including failure status; it rejects
 on timeout, transport failure or session termination. Correlation uses exact
-request IDs and expected peers. `commandTimeout` defaults to 6,000 ms. Successful
+request IDs, methods and expected peers. `commandTimeout` defaults to 6,000 ms. Successful
 responses cancel their timers. Timeouts never include resource/credential data.
 
 Call `await client.sendFinishingSession()` for protocol closure, or
@@ -188,3 +189,50 @@ assembled content size and result depth. The cumulative stream budget also count
 incoming patch bytes and bytes cloned by copy/move. Owned subtree sizes are cached;
 array append updates only its ancestor path, avoiding a full-document copy or
 serialization on every contribution. Complete content is returned only at end.
+
+## Streamed commands
+
+The LIME 2 profile supports both streamed command requests and responses, using
+text concatenation or RFC 6902 JSON Patch. Every contribution keeps id and method.
+A request start adds URI and type; data carries resource; request end has no
+status. A response start has type and no URI/status; response end must declare
+success or failure, with reason for failure. Complete requests/responses can be
+mixed independently with streamed ones. LIME 1 mode rejects command streaming.
+
+```js
+const responsePromise = client.processCommand({
+  id: 'c2', method: 'set', uri: '/preferences', type: 'json', stream: 'start'
+}, 10000);
+client.sendCommand({id:'c2',method:'set',stream:'data',resource:[
+  {op:'add',path:'/locale',value:'en'},
+  {op:'add',path:'/items',value:[null]}
+]});
+client.sendCommand({id:'c2',method:'set',stream:'end'});
+const response = await responsePromise; // waits for complete response or response end
+```
+
+`onCommand` receives complete requests only after end, and ordinary uncorrelated
+responses. `processCommand` resolves a correlated response only on terminal
+success/failure. `onCommandProgress(command, response)` receives valid provisional
+start/data frames without full accumulated snapshots; response identifies the
+role inherited from the exchange. Validate schemas and authorize complete
+requests before executing. Failed response streams discard provisional resource
+and resolve with status/reason, without type/resource. Early ordinary failure
+rejects an unfinished request; later data/end cannot execute it.
+
+Incoming and outgoing streams use independent payload state, with active IDs
+reserved per peer until the response ends. Invalid grammar, pointers, routing,
+methods, batches or limits discard that exchange. Resource ownership and bounds
+match message assembly. `activeCommandCount` includes remote requests awaiting a
+reply and raw local requests, not just `processCommand` promises.
+
+The processCommand timeout is absolute across input and result streaming. Other
+exchanges use commandStreamTimeout from their first envelope; progress does not
+extend it. `onCommandError` reports expiry of those exchanges. Session end/disposal,
+transport errors and timeouts release state. A timeout after submission leaves
+execution unconfirmed. Use a fresh ID per invocation to avoid delayed-frame
+ambiguity after completed-ID reuse. Commands never enter message watermarks or
+automatic retries. Cancellation/abort and capability wire names remain undefined;
+both directions are supported by this profile convention. Direct receive loops
+can use the exported CommandAssembler, calling discard on timeout/send failure
+and reset at session end, with session-bound routing defaults on every frame.

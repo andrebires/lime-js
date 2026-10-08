@@ -19,6 +19,7 @@ export
   } from "./Protocol/Notification";
 export
   { default as Command
+  , CommandStream
   , CommandMethod
   , CommandStatus
   , CommandListener
@@ -69,3 +70,5 @@ export { default as Transport } from "./Protocol/Network/Transport";
 export { default as ContentTypes, ContentTypeAliases, ContentTypeRegistry } from "./ContentTypes";
 
 export { default as MessageAssembler, AssemblyLimits } from "./Protocol/MessageAssembler";
+
+export { default as CommandAssembler, CommandAssemblyResult, CommandDirection } from "./Protocol/CommandAssembler";

@@ -6,6 +6,7 @@ import Session, { SessionListener, SessionState } from "../Session";
 import Transport from "../Network/Transport";
 import { ContentTypeRegistry } from "../../ContentTypes";
 import MessageAssembler, { AssemblyLimits } from "../MessageAssembler";
+import CommandAssembler from "../CommandAssembler";
 import DeliveryBuffer, { PendingDelivery } from "./DeliveryBuffer";
 import { validateNotification, validateMessage } from "../Validation";
 
@@ -19,10 +20,11 @@ export interface ChannelOptions extends AssemblyLimits {
   sessionTimeout?: number;
   maxPendingMessages?: number;
   maxPendingCommands?: number;
+  commandStreamTimeout?: number;
   retryInterval?: number;
   maxRetryAttempts?: number;
 }
-interface PendingCommand { resolve: (command: Command) => void; reject: (error: Error) => void; timer: ReturnType<typeof setTimeout>; recipient: string; }
+interface PendingCommand { resolve: (command: Command) => void; reject: (error: Error) => void; timer: ReturnType<typeof setTimeout>; recipient: string; method: string; }
 
 export default abstract class Channel implements MessageChannel, CommandChannel, NotificationChannel, SessionChannel, CommandProcessor {
   commandTimeout = 6000;
@@ -37,6 +39,9 @@ export default abstract class Channel implements MessageChannel, CommandChannel,
   private outgoing: MessageAssembler;
   private deliveries: DeliveryBuffer;
   private commands = new Map<string, PendingCommand>();
+  private commandAssembly: CommandAssembler;
+  private commandTimers = new Map<string, ReturnType<typeof setTimeout>>();
+  private readonly commandStreamTimeout: number;
   private retryTimer: ReturnType<typeof setTimeout>;
   private finalReceiptTimers = new Map<PendingDelivery, ReturnType<typeof setTimeout>>();
   private readonly maxPendingCommands: number;
@@ -53,6 +58,9 @@ export default abstract class Channel implements MessageChannel, CommandChannel,
     this.outgoing = new MessageAssembler(this.contentTypes, options);
     this.deliveries = new DeliveryBuffer(options.maxPendingMessages ?? 256);
     this.maxPendingCommands = options.maxPendingCommands ?? 256;
+    this.commandAssembly = new CommandAssembler(this.contentTypes, options, this.maxPendingCommands);
+    this.commandStreamTimeout = options.commandStreamTimeout ?? 30000;
+    if (!Number.isSafeInteger(this.commandStreamTimeout) || this.commandStreamTimeout < 1 || this.commandStreamTimeout > 2147483647) throw new Error("Invalid command stream timeout");
     this.retryInterval = options.retryInterval ?? 5000;
     this.maxRetryAttempts = options.maxRetryAttempts ?? 3;
     for (const value of [this.maxPendingCommands, this.retryInterval, this.maxRetryAttempts]) {
@@ -66,6 +74,8 @@ export default abstract class Channel implements MessageChannel, CommandChannel,
   abstract onNotification(notification: Notification): void;
   abstract onSession(session: Session): void;
   onMessageProgress(message: Message): void {}
+  onCommandProgress(command: Command, response: boolean): void {}
+  onCommandError(error: Error, command: Command): void {}
   onProtocolError(error: Error, envelope: Envelope): void { throw error; }
   onDeliveryError(error: Error, message: Message): void {}
 
@@ -83,7 +93,9 @@ export default abstract class Channel implements MessageChannel, CommandChannel,
     const isCommand = Envelope.isCommand(envelope);
     const isSession = Envelope.isSession(envelope);
     if (Number(isMessage) + Number(isNotification) + Number(isCommand) + Number(isSession) !== 1) {
-      this.onProtocolError(new Error("Envelope must identify exactly one family"), envelope);
+      const error = new Error("Envelope must identify exactly one family");
+      if (isCommand && this.version === 2 && this.isForMe(envelope)) this.dropCommand(envelope as Command, "incoming", error);
+      this.onProtocolError(error, envelope);
       return;
     }
     if (isMessage) {
@@ -116,9 +128,24 @@ export default abstract class Channel implements MessageChannel, CommandChannel,
       } catch (error) { this.onProtocolError(error as Error, envelope); return; }
       this.onNotification(notification);
     } else if (isCommand) {
-      const command = envelope as Command;
+      let command = envelope as Command;
+      if (this.version === 2 && this.isForMe(command)) {
+        try {
+          this.requireEstablished();
+          const result = this.commandAssembly.accept(this.normalizedCommand(command), "incoming");
+          this.syncCommandTimer(command, "incoming");
+          if (command.stream === "start" || command.stream === "data") this.onCommandProgress(command, result.response);
+          if (!result.command) return;
+          command = result.command;
+        } catch (error) {
+          this.dropCommand(command, "incoming", error as Error);
+          this.onProtocolError(error as Error, envelope); return;
+        }
+      } else if (command.stream !== undefined) {
+        this.onProtocolError(new Error("Unsupported or misaddressed command stream"), envelope); return;
+      }
       const pending = command.status && this.commands.get(command.id);
-      if (pending && this.isForMe(command) && (command.from || this.remoteNode || "") === pending.recipient) {
+      if (pending && command.method === pending.method && this.isForMe(command) && (command.from || this.remoteNode || "") === pending.recipient) {
         clearTimeout(pending.timer);
         this.commands.delete(command.id);
         pending.resolve(command);
@@ -159,6 +186,7 @@ export default abstract class Channel implements MessageChannel, CommandChannel,
   }
   get pendingMessageCount(): number { return this.deliveries.size; }
   get pendingCommandCount(): number { return this.commands.size; }
+  get activeCommandCount(): number { return this.commandAssembly.size; }
   retryUnacknowledged(): void {
     this.requireEstablished();
     for (const entry of this.deliveries.values()) {
@@ -202,14 +230,61 @@ export default abstract class Channel implements MessageChannel, CommandChannel,
     return new Promise((resolve, reject) => {
       const timer = setTimeout(() => {
         this.commands.delete(command.id);
-        reject(new Error(`Command ${command.id} processing timed out`));
+        this.dropCommand(command, "outgoing");
+        reject(new Error(`Command ${command.id} processing timed out; outcome is unconfirmed`));
       }, timeout);
-      this.commands.set(command.id, { resolve, reject, timer, recipient: command.to ? command.to.toString() : this.remoteNode || "" });
+      this.commands.set(command.id, { resolve, reject, timer, recipient: command.to ? command.to.toString() : this.remoteNode || "", method: command.method });
       try { this.sendCommand(command); }
       catch (error) { clearTimeout(timer); this.commands.delete(command.id); reject(error); }
     });
   }
-  sendCommand(command: Command): void { this.requireEstablished(); this.transport.send(command); }
+  sendCommand(command: Command): void {
+    this.requireEstablished();
+    if (this.version === 1) {
+      if (command.stream !== undefined) throw new Error("LIME 1 does not support command streaming");
+      this.transport.send(command); return;
+    }
+    try {
+      this.commandAssembly.accept(this.commandContext(command, "outgoing"), "outgoing");
+      this.syncCommandTimer(command, "outgoing");
+      this.transport.send(command);
+    } catch (error) { this.dropCommand(command, "outgoing", error as Error); throw error; }
+  }
+  private normalizedCommand(command: Command): Command {
+    return { ...command, from: command.from || this.remoteNode, to: this.localNode };
+  }
+  private commandContext(command: Command, direction: "incoming" | "outgoing"): Command {
+    return direction === "incoming" ? this.normalizedCommand(command) : { ...command, from: this.localNode, to: command.to || this.remoteNode };
+  }
+  private commandTimerKey(command: Command, direction: "incoming" | "outgoing"): string {
+    const value = this.commandContext(command, direction);
+    return JSON.stringify([direction === "incoming" ? value.from : value.to?.toString(), command.id]);
+  }
+  private dropCommand(command: Command, direction: "incoming" | "outgoing", error?: Error): void {
+    this.commandAssembly.discard(this.commandContext(command, direction), direction);
+    const key = this.commandTimerKey(command, direction);
+    clearTimeout(this.commandTimers.get(key)); this.commandTimers.delete(key);
+    const peer = direction === "incoming" ? command.from || this.remoteNode : command.to?.toString() || this.remoteNode;
+    const pending = this.commands.get(command.id);
+    if (error && pending && pending.recipient === peer) {
+      clearTimeout(pending.timer); this.commands.delete(command.id); pending.reject(error);
+    }
+  }
+  private syncCommandTimer(command: Command, direction: "incoming" | "outgoing"): void {
+    const key = this.commandTimerKey(command, direction);
+    const context = this.commandContext(command, direction);
+    if (!this.commandAssembly.has(context, direction)) {
+      clearTimeout(this.commandTimers.get(key)); this.commandTimers.delete(key); return;
+    }
+    // A processCommand promise already owns an absolute request deadline.
+    const peer = direction === "incoming" ? context.from : context.to?.toString();
+    if (this.commands.get(command.id)?.recipient === peer || this.commandTimers.has(key)) return;
+    const timer = setTimeout(() => {
+      this.dropCommand(command, direction);
+      this.onCommandError(new Error("Command exchange timed out; outcome is unconfirmed"), command);
+    }, this.commandStreamTimeout);
+    this.commandTimers.set(key, timer); (timer as any).unref?.();
+  }
   sendNotification(notification: Notification): void {
     this.requireEstablished();
     if (this.version === 2) validateNotification(notification);
@@ -223,6 +298,9 @@ export default abstract class Channel implements MessageChannel, CommandChannel,
     clearTimeout(this.retryTimer);
     for (const timer of this.finalReceiptTimers.values()) clearTimeout(timer);
     this.finalReceiptTimers.clear();
+    for (const timer of this.commandTimers.values()) clearTimeout(timer);
+    this.commandTimers.clear();
+    this.commandAssembly.reset();
     this.incoming.reset();
     this.outgoing.reset();
     this.contentTypes.reset();
