@@ -46,6 +46,18 @@ test('send writes one JSON text frame per envelope and enforces state and size',
   assert.throws(() => transport.send({ id: 'm', type: 'text/plain', content: 'x'.repeat(40) }), /Frame limit/);
 });
 
+test('frame limits count UTF-8 bytes, not UTF-16 code units', async () => {
+  const transport = make({ maxFrameBytes: 64 });
+  const errors = []; transport.onError = e => errors.push(e.message);
+  const opened = transport.open('ws://example'); const socket = FakeSocket.last; socket.accept(); await opened;
+  // 20 characters of three bytes each, plus JSON framing: 70 bytes but 30 code units.
+  assert.throws(() => transport.send({ id: 'é', type: 'text/plain', content: '€'.repeat(20) }), /Frame limit/);
+  transport.send({ content: '€'.repeat(10) }); // 41 bytes.
+  socket.frame('"' + '😀'.repeat(16) + '"'); // 66 bytes, 34 code units.
+  assert.equal(socket.closed, 4009);
+  assert.deepEqual(errors, ['Frame limit exceeded']);
+});
+
 test('received frames become envelopes in order; bad frames report and close', async () => {
   const transport = make({ maxFrameBytes: 64 });
   const envelopes = [], errors = [];

@@ -1,5 +1,5 @@
-import { ClientChannel, WebSocketTransport } from '../../dist/Lime/Slim';
-import type { Message, Notification, Command, Session, WebSocketClose } from '../../dist/Lime/Slim';
+import { ClientChannel, WebSocketTransport } from '../../slim';
+import type { Message, Notification, Command, Session, WebSocketClose } from '../../slim';
 const transport = new WebSocketTransport({ protocols: ['lime'], maxFrameBytes: 65536 });
 transport.onClose = (event: WebSocketClose) => console.log(event.code, event.wasClean);
 transport.onError = error => console.log(error.message);

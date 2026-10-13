@@ -21,7 +21,7 @@ export type WebSocketFactory = new (url: string, protocols?: string | string[]) 
 export interface WebSocketTransportOptions {
   /** Subprotocols offered in the handshake. The server must select the first one. Default `["lime"]`. */
   protocols?: string[];
-  /** Largest frame, in UTF-16 code units, sent or accepted. Default 65536. */
+  /** Largest frame, in UTF-8 bytes, sent or accepted. Default 65536. */
   maxFrameBytes?: number;
   /** Socket constructor, for tests or non-browser runtimes. */
   WebSocket?: WebSocketFactory;
@@ -89,7 +89,7 @@ export default class WebSocketTransport implements Transport {
   send(envelope: Envelope): void {
     if (!this.socket || this.socket.readyState !== OPEN) throw new Error("WebSocket is not open");
     const data = JSON.stringify(envelope);
-    if (data.length > this.maxFrame) throw new Error("Frame limit exceeded");
+    if (utf8Exceeds(data, this.maxFrame)) throw new Error("Frame limit exceeded");
     this.socket.send(data);
   }
 
@@ -110,7 +110,7 @@ export default class WebSocketTransport implements Transport {
 
   private receive(data: unknown): void {
     if (typeof data !== "string") { this.fail(4003, new Error("LIME requires text frames")); return; }
-    if (data.length > this.maxFrame) { this.fail(4009, new Error("Frame limit exceeded")); return; }
+    if (utf8Exceeds(data, this.maxFrame)) { this.fail(4009, new Error("Frame limit exceeded")); return; }
     let envelope: Envelope;
     try {
       envelope = JSON.parse(data);
@@ -127,4 +127,20 @@ export default class WebSocketTransport implements Transport {
     this.onError(error);
     this.socket.close(code);
   }
+}
+
+/** Reports whether the UTF-8 encoding of s is longer than max bytes, without encoding it. */
+function utf8Exceeds(s: string, max: number): boolean {
+  if (s.length > max) return true; // Every code unit is at least one byte.
+  if (s.length * 3 <= max) return false; // Every code unit is at most three bytes.
+  let bytes = 0;
+  for (let i = 0; i < s.length; i++) {
+    const c = s.charCodeAt(i);
+    if (c < 0x80) bytes += 1;
+    else if (c < 0x800) bytes += 2;
+    else if (c >= 0xd800 && c <= 0xdbff && i + 1 < s.length && (s.charCodeAt(i + 1) & 0xfc00) === 0xdc00) { bytes += 4; i++; }
+    else bytes += 3;
+    if (bytes > max) return true;
+  }
+  return false;
 }

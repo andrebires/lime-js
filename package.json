@@ -5,7 +5,8 @@
   "main": "dist/lime.js",
   "files": [
     "dist",
-    "lime-js.d.ts"
+    "lime-js.d.ts",
+    "slim.d.ts"
   ],
   "scripts": {
     "build": "node scripts/build.mjs",
