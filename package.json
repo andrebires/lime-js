@@ -50,6 +50,11 @@
       "import": "./dist/lime.mjs",
       "require": "./dist/lime.js"
     },
+    "./slim": {
+      "types": "./dist/Lime/Slim.d.ts",
+      "import": "./dist/lime-slim.mjs"
+    },
     "./dist/*": "./dist/*"
-  }
+  },
+  "sideEffects": false
 }

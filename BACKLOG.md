@@ -51,3 +51,11 @@
 - Acceptance: no invocation before request end, no response completion before terminal status, bounded exchanges and timeout/disconnect/error cleanup, peer/method/direction isolation, no message receipts/retries, shared wire fixtures, serialized integration tests, package/type checks and >=90% changed-line coverage.
 - Profile: support both command directions by convention; no speculative capability fields or automatic command retry. Absolute deadlines report unconfirmed outcome.
 - Evidence: 66 tests pass, 39 shared command vectors, serialized transport contracts and controlled timeout/rejection/disconnect checks; 99.22% source lines and 224/224 changed lines (100%). Native Node 20 passes 35 package/stream/transport tests; generated types and package dry run pass. Current benchmark costs are recorded in docs/lime-2-client.md.
+
+## LIME2-05 — WebSocket transport and slim client entry
+
+- Status: Completed
+- Authority: user request, 2026-10-13; a prerequisite of limao milestone M2 (Durable conversation).
+- Outcome: a browser `WebSocketTransport` (one JSON text frame per envelope, `lime` subprotocol required, bounded frames, no reconnect) and a side-effect-free `lime-js/slim` ESM entry exporting only `ClientChannel` and `WebSocketTransport`.
+- Acceptance: subprotocol and close-before-open rejection, frame order, binary/malformed/oversized frame rejection with browser-legal close codes, one-round-trip transport-identity establishment through the slim build, public slim types, a gzip budget test, >=90% changed-line coverage.
+- Size: the target was 6 KB gzipped; measured 9.2 KB minified and gzipped, because `ClientChannel` always carries the stream and command assemblers. Making them optional needs a channel refactor; the budget test guards 9.5 KB until then.

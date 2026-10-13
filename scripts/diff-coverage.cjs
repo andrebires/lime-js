@@ -21,8 +21,9 @@ const missing = [];
 for (const [path, lines] of changed) {
   const file = coverage[resolve(path)];
   if (!file) {
-    const output = ts.transpileModule(readFileSync(path, "utf8"), { compilerOptions: { target: ts.ScriptTarget.ES2018, module: ts.ModuleKind.ESNext } }).outputText.trim();
-    if (/^(export\s*\{\s*\}\s*;)?$/.test(output)) continue;
+    const output = ts.transpileModule(readFileSync(path, "utf8"), { compilerOptions: { target: ts.ScriptTarget.ES2018, module: ts.ModuleKind.ESNext, removeComments: true } }).outputText.trim();
+    // Type-only and re-export-only modules have no executable statements of their own.
+    if (/^(export\s*\{[^}]*\}(\s*from\s*"[^"]+")?\s*;\s*)*$/.test(output)) continue;
     console.error(`Missing coverage for changed source ${path}`); process.exitCode = 1; continue; }
   const hits = new Map();
   for (const [id, location] of Object.entries(file.statementMap)) {

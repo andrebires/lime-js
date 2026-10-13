@@ -9,7 +9,9 @@ const umd = {
 const builds = [
   { ...options, outfile: 'dist/lime.mjs', format: 'esm' },
   { ...options, ...umd, outfile: 'dist/lime.js', format: 'cjs' },
-  { ...options, ...umd, outfile: 'dist/lime.min.js', format: 'cjs', minify: true }
+  { ...options, ...umd, outfile: 'dist/lime.min.js', format: 'cjs', minify: true },
+  // The slim entry stays unminified: applications bundle and minify it themselves.
+  { ...options, entryPoints: ['src/Lime/Slim.ts'], outfile: 'dist/lime-slim.mjs', format: 'esm', target: 'es2020' }
 ];
 if (process.argv.includes('--watch')) {
   for (const config of builds) { const watcher = await context(config); await watcher.watch(); }

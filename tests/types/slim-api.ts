@@ -1,0 +1,13 @@
+import { ClientChannel, WebSocketTransport } from '../../dist/Lime/Slim';
+import type { Message, Notification, Command, Session, WebSocketClose } from '../../dist/Lime/Slim';
+const transport = new WebSocketTransport({ protocols: ['lime'], maxFrameBytes: 65536 });
+transport.onClose = (event: WebSocketClose) => console.log(event.code, event.wasClean);
+transport.onError = error => console.log(error.message);
+const opened: Promise<void> = transport.open('wss://example/lime');
+const client = new ClientChannel(transport, true, true, { retryInterval: 0 });
+const session: Promise<Session> = client.establishSession();
+const message: Message = { id: 'm', type: 'text/plain', content: 'hello' };
+client.sendMessage(message);
+client.onNotification = (notification: Notification) => console.log(notification.event);
+const response: Promise<Command> = client.processCommand({ id: 'c', method: 'get', uri: '/x' });
+void [opened, session, response];

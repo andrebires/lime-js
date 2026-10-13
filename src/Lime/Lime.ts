@@ -65,6 +65,13 @@ export { default as ClientChannel } from "./Protocol/Client/ClientChannel";
 
 // Lime.Protocol.Network
 export { default as Transport } from "./Protocol/Network/Transport";
+export
+  { default as WebSocketTransport
+  , WebSocketTransportOptions
+  , WebSocketLike
+  , WebSocketFactory
+  , WebSocketClose
+  } from "./Protocol/Network/WebSocketTransport";
 
 // Lime.ContentTypes
 export { default as ContentTypes, ContentTypeAliases, ContentTypeRegistry } from "./ContentTypes";
