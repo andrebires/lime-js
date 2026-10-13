@@ -1,10 +1,11 @@
 import Message from "../Message";
 import Notification from "../Notification";
 import { revision } from "../Validation";
-export interface PendingDelivery { message: Message; complete: boolean; attempts: number; failed?: boolean; recipient: string; position: number; }
+export interface PendingDelivery { message: Message; complete: boolean; attempts: number; recipient: string; position: number; }
 export default class DeliveryBuffer {
   private entries = new Map<string, PendingDelivery>();
   private acknowledged = new Map<string, { thread?: string; position: number }>();
+  private failedStreams = new Set<string>();
   private nextPosition = 0;
   constructor(private capacity: number) {
     if (!Number.isSafeInteger(capacity) || capacity < 1) throw new Error("Pending message capacity must be positive");
@@ -12,7 +13,7 @@ export default class DeliveryBuffer {
   private key(id: string, rev: number, recipient: string): string { return JSON.stringify([recipient, id, rev]); }
   get size(): number { return this.entries.size; }
   values(): PendingDelivery[] { return Array.from(this.entries.values()); }
-  clear(): void { this.entries.clear(); this.acknowledged.clear(); }
+  clear(): void { this.entries.clear(); this.acknowledged.clear(); this.failedStreams.clear(); }
   contains(entry: PendingDelivery): boolean { return this.entries.get(this.key(entry.message.id, revision(entry.message), entry.recipient)) === entry; }
   private remember(key: string, entry: PendingDelivery): void {
     this.acknowledged.set(key, { thread: entry.message.thread, position: entry.position });
@@ -27,11 +28,13 @@ export default class DeliveryBuffer {
     this.entries.set(key, { message: { ...message }, complete: message.stream === undefined, attempts: 0, recipient, position: this.nextPosition++ });
   }
   complete(message: Message, recipient: string): void {
-    const entry = this.entries.get(this.key(message.id, revision(message), recipient));
+    const key = this.key(message.id, revision(message), recipient);
+    // The server already failed this stream; its remaining frames are no longer tracked.
+    if (this.failedStreams.delete(key)) return;
+    const entry = this.entries.get(key);
     if (!entry) throw new Error("Stream has no pending delivery");
     entry.message = message;
     entry.complete = true;
-    if (entry.failed) { this.remember(this.key(message.id, revision(message), recipient), entry); this.entries.delete(this.key(message.id, revision(message), recipient)); }
   }
   remove(message: Message, recipient: string): void { this.entries.delete(this.key(message.id, revision(message), recipient)); }
   acknowledge(notification: Notification, recipient: string): void {
@@ -45,9 +48,14 @@ export default class DeliveryBuffer {
     if (notification.thread !== undefined && notification.thread !== thread) throw new Error("Receipt thread mismatch");
     if (notification.event === "failed") {
       // A failure is the server's final answer: stop retrying, but keep the revision resolvable.
-      // An unfinished stream stays until its last frame so later frames still resolve.
-      if (entry && entry.complete) { this.remember(marker, entry); this.entries.delete(marker); }
-      else if (entry) entry.failed = true;
+      if (!entry) return;
+      this.remember(marker, entry);
+      this.entries.delete(marker);
+      // Frames the producer still sends for an unfinished stream must keep resolving.
+      if (!entry.complete) {
+        this.failedStreams.add(marker);
+        if (this.failedStreams.size > this.capacity * 4) this.failedStreams.delete(this.failedStreams.values().next().value);
+      }
       return;
     }
     if (notification.event !== "received") return;

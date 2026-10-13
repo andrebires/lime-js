@@ -141,7 +141,7 @@ test('rejects malformed, unresolved, cross-recipient, wrong revision, and mismat
 test('an incomplete stream is not individually receiptable and an unknown destination cannot correlate by id', () => {
   const {client:c,transport:t,errors} = channel(); c.sendMessage({id:'a',type:'text',stream:'start'});
   t.receive(receipt('a')); assert.match(errors[0].error.message,/Incomplete/);
-  t.receive({id:'a',event:'failed',reason:{code:21}}); assert.equal(c.pendingMessageCount,1); c.dispose();
+  t.receive({id:'a',event:'failed',reason:{code:21}}); assert.equal(c.pendingMessageCount,0); c.dispose();
 });
 test('retry buffers keep full content, preserve identity, and isolate caller mutations', () => {
   const {client:c,transport:t,deliveries} = channel({maxRetryAttempts:2});
@@ -257,7 +257,7 @@ test('pending stream identity and thread metadata do not retain the caller envel
   const {client:c,transport:t,errors}=channel();
   const start={id:'m',thread:'t',type:'text',stream:'start'};c.sendMessage(start);start.thread='mutated';start.id='mutated';
   t.receive({id:'m',thread:'t',event:'failed',reason:{code:21}});
-  assert.equal(errors.length,0);assert.equal(c.pendingMessageCount,1);
+  assert.equal(errors.length,0);assert.equal(c.pendingMessageCount,0);
   c.sendMessage({id:'m',stream:'end'});assert.equal(c.pendingMessageCount,0);t.receive(receipt('m',{thread:'t'}));assert.equal(errors.length,0);c.dispose();
 });
 
