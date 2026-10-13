@@ -36,7 +36,11 @@ export default class DeliveryBuffer {
     entry.message = message;
     entry.complete = true;
   }
-  remove(message: Message, recipient: string): void { this.entries.delete(this.key(message.id, revision(message), recipient)); }
+  remove(message: Message, recipient: string): void {
+    const key = this.key(message.id, revision(message), recipient);
+    this.entries.delete(key);
+    this.failedStreams.delete(key);
+  }
   acknowledge(notification: Notification, recipient: string): void {
     const marker = this.key(notification.id, revision(notification), recipient);
     const entry = this.entries.get(marker);
@@ -52,10 +56,8 @@ export default class DeliveryBuffer {
       this.remember(marker, entry);
       this.entries.delete(marker);
       // Frames the producer still sends for an unfinished stream must keep resolving.
-      if (!entry.complete) {
-        this.failedStreams.add(marker);
-        if (this.failedStreams.size > this.capacity * 4) this.failedStreams.delete(this.failedStreams.values().next().value);
-      }
+      // Markers live exactly as long as the active stream, which the assembler already bounds.
+      if (!entry.complete) this.failedStreams.add(marker);
       return;
     }
     if (notification.event !== "received") return;

@@ -119,6 +119,12 @@ test('consumed notifications never clear delivery buffer', () => {
   assert.equal(c.pendingMessageCount,1); assert.equal(notifications.length,1); assert.equal(errors.length,0);
   t.receive(receipt('m')); c.dispose();
 });
+test('failed streams stay finishable beyond pending capacity', () => {
+  const {client:c,transport:t,errors} = channel({maxPendingMessages:1});
+  for (let i=0;i<6;i++) { c.sendMessage({id:'s'+i,type:'text',stream:'start'}); t.receive({id:'s'+i,event:'failed',reason:{code:21}}); }
+  for (let i=0;i<6;i++) c.sendMessage({id:'s'+i,stream:'end'});
+  assert.equal(errors.length,0); assert.equal(c.pendingMessageCount,0); c.dispose();
+});
 test('failed notification stops retries of that message', () => {
   const {client:c,transport:t,notifications,errors} = channel();
   c.sendMessage(msg('m',{thread:'t'})); c.sendMessage(msg('n'));
