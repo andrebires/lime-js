@@ -5,8 +5,8 @@ supports the **LIME 2 v0.1 review draft (2026-10-07)**, with an explicit best-ef
 LIME 1 wire mode. The draft is not an official released LIME standard.
 
 The client uses native promises and has no runtime dependencies. Builds include
-CommonJS (`dist/lime.js`), ESM (`dist/lime.mjs`), and browser/AMD UMD bundles
-(`dist/lime.js`, `dist/lime.min.js`). Type declarations ship with the package.
+CommonJS (`dist/lime.js`), ESM (`dist/lime.mjs`), browser/AMD UMD bundles
+(`dist/lime.js`, `dist/lime.min.js`) and a slim ESM client (`dist/lime-slim.mjs`). Type declarations ship with the package.
 Runtime: Node 20+ or a modern browser; development and tests: Node 24+.
 
 ## Use
@@ -15,6 +15,29 @@ Supply an opened transport that implements the exported `Transport` interface.
 The transport delivers parsed envelopes through `onEnvelope` and implements
 `send`, `close`, compression and encryption accessors. A WebSocket transport
 must send one JSON envelope per text frame and preserve frame order.
+
+`WebSocketTransport` is that transport for browsers (or any runtime with a
+`WebSocket` constructor, passed as an option). It offers the `lime` subprotocol
+and rejects `open` unless the server selects it, sends one JSON text frame per
+envelope, and closes the socket on binary (4003), malformed (4007) or oversized
+(4009) frames after reporting them through `onError`. It never reconnects: a new
+connection needs a new transport and a new channel. `onClose` reports how an
+opened socket ended.
+
+```js
+import { ClientChannel, WebSocketTransport } from 'lime-js/slim';
+
+const transport = new WebSocketTransport();
+transport.onClose = ({ code }) => scheduleReconnect(code);
+await transport.open('wss://example.org/lime?token=…');
+const client = new ClientChannel(transport);
+await client.establishSession(); // one round trip when the server knows the transport identity
+```
+
+The `lime-js/slim` entry (`dist/lime-slim.mjs`) exports only `ClientChannel` and
+`WebSocketTransport`, plus types. It is unminified ESM marked side-effect free,
+for applications that bundle and minify it themselves. Minified and gzipped it is
+about 9.2 KB; the client channel always carries the stream and command assemblers.
 
 ```js
 import { ClientChannel, PlainAuthentication } from 'lime-js';

@@ -1,4 +1,4 @@
 {
   "compilerOptions": { "target": "ES2018", "module": "commonjs", "moduleResolution": "node", "strict": true, "noEmit": true },
-  "files": ["types/public-api.ts"]
+  "files": ["types/public-api.ts", "types/slim-api.ts"]
 }

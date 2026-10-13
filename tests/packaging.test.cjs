@@ -32,3 +32,10 @@ test('identity/node round trip and authentication exports remain usable in legac
   assert.equal(new Lime.GuestAuthentication().scheme,'guest');
   const reason=new Lime.Reason(21);assert.equal(reason.toString(),' (Code 21)');
 });
+test('slim entry stays within its gzip budget once minified', async () => {
+  const { build } = require('esbuild'); const zlib = require('node:zlib');
+  const out = await build({ entryPoints: ['dist/lime-slim.mjs'], bundle: true, minify: true, format: 'esm', write: false });
+  const size = zlib.gzipSync(out.outputFiles[0].contents, { level: 9 }).length;
+  // Measured at 9.2 KB: ClientChannel always carries the stream and command assemblers.
+  assert.ok(size <= 9728, `lime-slim is ${size} bytes gzipped`);
+});
