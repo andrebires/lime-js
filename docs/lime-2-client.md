@@ -15,7 +15,7 @@ freeze the draft or certify independent-server interoperability.
 | 3–4: messages | Optional IDs on complete messages; positive safe-integer revisions default to 1 independently on every envelope; thread context; start/data/end; no native multipart. |
 | 4.1: text | Decoded contributions are accumulated and joined only at terminal completion; raw progress callbacks avoid repeated full snapshots. |
 | 4.2: JSON | Fresh empty object per stream/revision; RFC 6902 add/remove/replace/move/copy/test; incremental arrays and literal null; prototype-shaped keys treated as JSON data. |
-| 5: notifications | Received/consumed/failed event and scope validation; exact revision and peer correlation; individual and cumulative session receipts; incomplete-prefix rejection; no read/failure clearing of transport buffers. |
+| 5: notifications | Received/consumed/failed event and scope validation; exact revision and peer correlation; individual and cumulative session receipts; incomplete-prefix rejection; no read clearing of transport buffers; failure stops retries. |
 | 5.1: retries | Bounded in-memory logical-message buffer; same-ID/revision complete replay; bounded automatic attempts; explicit retry API; exhaustion remains unacknowledged. |
 | 6: aliases | All nine enumerated built-ins; canonical MIME resolution; no second parsing or rewriting of nested MIME fields; local additive session registry. |
 | 7: commands | Complete and streamed requests/responses; method/peer/ID correlation, independent resource assembly, terminal status, bounded exchanges, absolute deadlines and cleanup. |
@@ -29,8 +29,8 @@ The draft leaves retry timing, pending lifetime and some error handling open.
 This implementation excludes ID-less traffic from buffering and preserves
 `(id, rev)` on retry. It rejects unresolved markers and cumulative gaps rather
 than implicitly resolving a failed/incomplete prefix. A `failed` notification
-reports failure but does not acknowledge delivery; a later full retry can resolve
-the pending message through `received`. Buffer exhaustion throws before send.
+is the server's final answer for that message: it is removed from the pending
+buffer and no longer retried (a late `received` for it is still accepted). Buffer exhaustion throws before send.
 Send failure removes that operation's pending state and reports the exception;
 the caller owns recovery from possible partial transport execution.
 

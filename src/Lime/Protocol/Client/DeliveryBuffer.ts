@@ -1,7 +1,7 @@
 import Message from "../Message";
 import Notification from "../Notification";
 import { revision } from "../Validation";
-export interface PendingDelivery { message: Message; complete: boolean; attempts: number; recipient: string; position: number; }
+export interface PendingDelivery { message: Message; complete: boolean; attempts: number; failed?: boolean; recipient: string; position: number; }
 export default class DeliveryBuffer {
   private entries = new Map<string, PendingDelivery>();
   private acknowledged = new Map<string, { thread?: string; position: number }>();
@@ -31,6 +31,7 @@ export default class DeliveryBuffer {
     if (!entry) throw new Error("Stream has no pending delivery");
     entry.message = message;
     entry.complete = true;
+    if (entry.failed) { this.remember(this.key(message.id, revision(message), recipient), entry); this.entries.delete(this.key(message.id, revision(message), recipient)); }
   }
   remove(message: Message, recipient: string): void { this.entries.delete(this.key(message.id, revision(message), recipient)); }
   acknowledge(notification: Notification, recipient: string): void {
@@ -42,6 +43,13 @@ export default class DeliveryBuffer {
     const thread = entry ? entry.message.thread : acknowledged.thread;
     const position = entry ? entry.position : acknowledged.position;
     if (notification.thread !== undefined && notification.thread !== thread) throw new Error("Receipt thread mismatch");
+    if (notification.event === "failed") {
+      // A failure is the server's final answer: stop retrying, but keep the revision resolvable.
+      // An unfinished stream stays until its last frame so later frames still resolve.
+      if (entry && entry.complete) { this.remember(marker, entry); this.entries.delete(marker); }
+      else if (entry) entry.failed = true;
+      return;
+    }
     if (notification.event !== "received") return;
     if (notification.scope !== "session") {
       if (entry) this.remember(marker, entry);
