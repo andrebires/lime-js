@@ -120,7 +120,7 @@ if (response.status === 'failure') handleCommandFailure(response.reason);
 Omitted scope is `message`. `received` allows `message`/`session`; `consumed`
 allows `message`/`thread`; `failed` allows only `message` and requires a LIME
 reason. A session receipt cannot cross an unfinished earlier message.
-Consumed/failed notifications never clear the receipt buffer. Read ordering and
+Consumed notifications never clear the receipt buffer; a failed notification stops retries for that message. Read ordering and
 correct emission of thread watermarks remain application responsibilities.
 
 Tracked deliveries retry automatically, bounded by the options below. Retries

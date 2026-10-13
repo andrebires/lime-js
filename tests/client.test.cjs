@@ -112,13 +112,26 @@ test('cumulative receipt cannot cross an incomplete stream even across threads',
   c.sendMessage({id:'a',stream:'data',content:'done'}); c.sendMessage({id:'a',stream:'end'});
   t.receive(receipt('b',{scope:'session'})); assert.equal(c.pendingMessageCount,0); c.dispose();
 });
-test('consumed and failed notifications never clear delivery buffer', () => {
+test('consumed notifications never clear delivery buffer', () => {
   const {client:c,transport:t,notifications,errors} = channel();
   c.sendMessage(msg('m',{thread:'t'}));
   t.receive({id:'m',event:'consumed',scope:'thread',thread:'t'});
-  t.receive({id:'m',event:'failed',reason:{code:21}});
-  assert.equal(c.pendingMessageCount,1); assert.equal(notifications.length,2); assert.equal(errors.length,0);
+  assert.equal(c.pendingMessageCount,1); assert.equal(notifications.length,1); assert.equal(errors.length,0);
   t.receive(receipt('m')); c.dispose();
+});
+test('failed streams stay finishable beyond pending capacity', () => {
+  const {client:c,transport:t,errors} = channel({maxPendingMessages:1});
+  for (let i=0;i<6;i++) { c.sendMessage({id:'s'+i,type:'text',stream:'start'}); t.receive({id:'s'+i,event:'failed',reason:{code:21}}); }
+  for (let i=0;i<6;i++) c.sendMessage({id:'s'+i,stream:'end'});
+  assert.equal(errors.length,0); assert.equal(c.pendingMessageCount,0); c.dispose();
+});
+test('failed notification stops retries of that message', () => {
+  const {client:c,transport:t,notifications,errors} = channel();
+  c.sendMessage(msg('m',{thread:'t'})); c.sendMessage(msg('n'));
+  t.receive({id:'m',event:'failed',reason:{code:21}});
+  assert.equal(c.pendingMessageCount,1); assert.equal(notifications.length,1); assert.equal(errors.length,0);
+  const before=t.sent.length; c.retryUnacknowledged();
+  assert.deepEqual(t.sent.slice(before).map(x=>x.id),['n']); c.dispose();
 });
 test('rejects malformed, unresolved, cross-recipient, wrong revision, and mismatched thread notifications', () => {
   const {client:c,transport:t,errors} = channel(); c.sendMessage(msg('m',{thread:'t'}));
@@ -134,7 +147,7 @@ test('rejects malformed, unresolved, cross-recipient, wrong revision, and mismat
 test('an incomplete stream is not individually receiptable and an unknown destination cannot correlate by id', () => {
   const {client:c,transport:t,errors} = channel(); c.sendMessage({id:'a',type:'text',stream:'start'});
   t.receive(receipt('a')); assert.match(errors[0].error.message,/Incomplete/);
-  t.receive({id:'a',event:'failed',reason:{code:21}}); assert.equal(c.pendingMessageCount,1); c.dispose();
+  t.receive({id:'a',event:'failed',reason:{code:21}}); assert.equal(c.pendingMessageCount,0); c.dispose();
 });
 test('retry buffers keep full content, preserve identity, and isolate caller mutations', () => {
   const {client:c,transport:t,deliveries} = channel({maxRetryAttempts:2});
@@ -250,8 +263,8 @@ test('pending stream identity and thread metadata do not retain the caller envel
   const {client:c,transport:t,errors}=channel();
   const start={id:'m',thread:'t',type:'text',stream:'start'};c.sendMessage(start);start.thread='mutated';start.id='mutated';
   t.receive({id:'m',thread:'t',event:'failed',reason:{code:21}});
-  assert.equal(errors.length,0);assert.equal(c.pendingMessageCount,1);
-  c.sendMessage({id:'m',stream:'end'});t.receive(receipt('m',{thread:'t'}));assert.equal(c.pendingMessageCount,0);c.dispose();
+  assert.equal(errors.length,0);assert.equal(c.pendingMessageCount,0);
+  c.sendMessage({id:'m',stream:'end'});assert.equal(c.pendingMessageCount,0);t.receive(receipt('m',{thread:'t'}));assert.equal(errors.length,0);c.dispose();
 });
 
 test('asynchronous receipt for the final retry never reports exhaustion', t => {
